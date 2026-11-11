@@ -2,9 +2,12 @@
 
 use App\Models\Institution;
 use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
@@ -189,6 +192,29 @@ test('institutions migration can safely rerun when its table already exists', fu
         ->and($institution->fresh()->is_active)->toBeFalse()
         ->and($institution->fresh()->accreditation_status)->toBe('Administrator-verified status')
         ->and($profile->fresh()->institution_id)->toBe($institution->id);
+});
+
+test('institutions migration repairs an existing student_profiles table missing user_id', function () {
+    Schema::drop('student_profiles');
+    Schema::create('student_profiles', function (Blueprint $table): void {
+        $table->id();
+        $table->string('legacy_note')->nullable();
+        $table->timestamps();
+    });
+    DB::table('student_profiles')->insert([
+        'legacy_note' => 'Preserve this legacy row',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $migration = require database_path('migrations/2026_11_11_144419_create_institutions_table.php');
+    $migration->up();
+
+    expect(Schema::hasColumn('student_profiles', 'user_id'))->toBeTrue()
+        ->and(Schema::hasColumn('student_profiles', 'institution_id'))->toBeTrue()
+        ->and(Schema::hasColumn('student_profiles', 'application_letter_path'))->toBeTrue()
+        ->and(DB::table('student_profiles')->count())->toBe(1)
+        ->and(DB::table('student_profiles')->value('legacy_note'))->toBe('Preserve this legacy row');
 });
 
 test('only administrators can add, edit and deactivate institutions without duplicates', function () {

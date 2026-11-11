@@ -62,11 +62,7 @@ return new class extends Migration
             'updated_at' => $now,
         ], $institutions));
 
-        if (Schema::hasTable('student_profiles') && ! Schema::hasColumn('student_profiles', 'institution_id')) {
-            Schema::table('student_profiles', function (Blueprint $table): void {
-                $table->foreignId('institution_id')->nullable()->after('user_id')->constrained()->nullOnDelete();
-            });
-        }
+        $this->ensureStudentProfilesSchema();
 
         if (Schema::hasTable('student_profiles') && Schema::hasColumn('student_profiles', 'institution_id')) {
             foreach (DB::table('institutions')->get(['id', 'name']) as $institution) {
@@ -84,10 +80,81 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('student_profiles', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('institution_id');
-        });
+        if (Schema::hasTable('student_profiles') && Schema::hasColumn('student_profiles', 'institution_id')) {
+            Schema::table('student_profiles', function (Blueprint $table): void {
+                $table->dropConstrainedForeignId('institution_id');
+            });
+        }
 
         Schema::dropIfExists('institutions');
+    }
+
+    private function ensureStudentProfilesSchema(): void
+    {
+        if (! Schema::hasTable('student_profiles')) {
+            Schema::create('student_profiles', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('user_id')->nullable()->unique()->constrained()->cascadeOnDelete();
+                $table->foreignId('institution_id')->nullable()->constrained()->nullOnDelete();
+                $table->string('phone', 30)->nullable();
+                $table->string('campus', 120)->nullable();
+                $table->string('faculty', 160)->nullable();
+                $table->unsignedTinyInteger('year_of_study')->nullable();
+                $table->string('student_registration_number', 100)->nullable()->unique();
+                $table->text('academic_interests')->nullable();
+                $table->string('application_letter_path')->nullable();
+                $table->timestamps();
+            });
+
+            return;
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'user_id')) {
+            Schema::table('student_profiles', function (Blueprint $table): void {
+                $table->foreignId('user_id')->nullable()->unique()->constrained()->cascadeOnDelete();
+            });
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'institution_id')) {
+            Schema::table('student_profiles', function (Blueprint $table): void {
+                $table->foreignId('institution_id')->nullable()->constrained()->nullOnDelete();
+            });
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'phone')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->string('phone', 30)->nullable());
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'campus')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->string('campus', 120)->nullable());
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'faculty')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->string('faculty', 160)->nullable());
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'year_of_study')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->unsignedTinyInteger('year_of_study')->nullable());
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'student_registration_number')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->string('student_registration_number', 100)->nullable()->unique());
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'academic_interests')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->text('academic_interests')->nullable());
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'application_letter_path')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->string('application_letter_path')->nullable());
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'created_at')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->timestamp('created_at')->nullable());
+        }
+
+        if (! Schema::hasColumn('student_profiles', 'updated_at')) {
+            Schema::table('student_profiles', fn (Blueprint $table) => $table->timestamp('updated_at')->nullable());
+        }
     }
 };
