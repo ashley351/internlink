@@ -92,7 +92,13 @@ test('kampala placement moves through application, supervision and logbook revie
     expect($visit->fresh()->status)->toBe('approved');
 
     $this->actingAs($student)->get(route('dashboard.student'))
-        ->assertOk()->assertSee('Your applications');
+        ->assertOk()
+        ->assertSee('Your applications')
+        ->assertSee('Applications made')
+        ->assertSee('Placed: 1')
+        ->assertDontSee('Interview invitations')
+        ->assertDontSee('Offers / placements')
+        ->assertDontSee('Profile basics');
     $this->actingAs($student)->get(route('dashboard.supervision'))
         ->assertOk()->assertSee('Request supervision');
     $this->actingAs($supervisor)->get(route('dashboard.university'))

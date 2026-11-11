@@ -72,25 +72,50 @@ test('dashboard dispatches to the account role', function () {
         ->assertSee('Manage your Kampala placements');
 });
 
-test('development demo accounts can sign in for each role', function () {
+test('accounts for each role can sign in with their own passwords', function () {
     foreach ([
-        ['email' => 'student@internlink.test', 'role' => User::ROLE_STUDENT],
-        ['email' => 'supervisor@internlink.test', 'role' => User::ROLE_SUPERVISOR],
-        ['email' => 'employer@internlink.test', 'role' => User::ROLE_ORGANISATION],
-        ['email' => 'admin@internlink.test', 'role' => User::ROLE_ADMIN],
+        ['email' => 'student@internlink.test', 'role' => User::ROLE_STUDENT, 'password' => 'student-password'],
+        ['email' => 'supervisor@internlink.test', 'role' => User::ROLE_SUPERVISOR, 'password' => 'lecturer-password'],
+        ['email' => 'employer@internlink.test', 'role' => User::ROLE_ORGANISATION, 'password' => 'organisation-password'],
+        ['email' => 'admin@internlink.test', 'role' => User::ROLE_ADMIN, 'password' => 'admin-password'],
     ] as $account) {
         $user = User::factory()->create([
             'email' => $account['email'],
             'role' => $account['role'],
-            'password' => bcrypt('password'),
+            'password' => $account['password'],
         ]);
 
         $this->post(route('login.store'), [
             'email' => $user->email,
-            'password' => 'password',
+            'password' => $account['password'],
+            'role' => $account['role'],
         ])->assertRedirect(route('dashboard'));
 
         $this->assertAuthenticatedAs($user);
         auth()->logout();
     }
+
+    $supervisor = User::factory()->create([
+        'email' => 'lecturer@example.test',
+        'role' => User::ROLE_SUPERVISOR,
+        'password' => 'lecturer-password',
+    ]);
+
+    $this->from(route('login'))->post(route('login.store'), [
+        'email' => $supervisor->email,
+        'password' => 'lecturer-password',
+        'role' => User::ROLE_ORGANISATION,
+    ])->assertRedirect(route('login'))
+        ->assertSessionHasErrors('email');
+    $this->assertGuest();
+});
+
+test('the sign-in page offers a choice for each account type', function () {
+    $this->get(route('login'))
+        ->assertOk()
+        ->assertSee('University lecturer')
+        ->assertSee('Organisation staff')
+        ->assertSee('Student')
+        ->assertSee('Administrator')
+        ->assertDontSee('data-demo-login');
 });

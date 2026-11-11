@@ -3,20 +3,14 @@
 @push('head')
 <style>
     .student-stats {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    @media (max-width: 580px) {
-        .student-stats {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+        grid-template-columns: minmax(0, 1fr);
     }
 </style>
 @endpush
 @section('content')
 <div class="wrap dash"><div class="dash-head"><span class="eyebrow">Student workspace · {{ $user->university }}</span><h1>Welcome back, {{ $user->name }}</h1><p class="muted">Your applications, placement progress and next steps, all live.</p></div>
 @if(session('status'))<div class="notice">{{ session('status') }}</div>@endif
-<div class="stats student-stats"><div class="stat"><strong>{{ $applications->where('status', 'interview')->count() }}</strong><span>Interview invitations</span></div><div class="stat"><strong>{{ $applications->whereIn('status', ['offered', 'placed'])->count() }}</strong><span>Offers / placements</span></div><div class="stat"><strong>{{ $user->course ? 'Ready' : 'Incomplete' }}</strong><span>Profile basics</span></div></div>
+<div class="stats student-stats"><div class="stat"><strong>{{ $applications->count() }}</strong><span>Applications made</span><div class="row" style="justify-content:flex-start;flex-wrap:wrap;margin-top:12px" aria-label="Application status summary">@forelse($applications->groupBy('status') as $status => $statusApplications)<span class="tag">{{ ucfirst(str_replace('_', ' ', $status)) }}: {{ $statusApplications->count() }}</span>@empty<span class="muted">No application statuses yet.</span>@endforelse</div></div></div>
 <div class="dash-grid"><section class="card"><div class="row"><div><span class="eyebrow">Matched to {{ $user->course }}</span><h2>Open Kampala internships</h2></div><a class="button light small" href="{{ route('internships.index') }}">Browse all</a></div><div class="list">@forelse($internships as $internship)<article class="item"><div class="row"><div><h3>{{ $internship->title }}</h3><p>{{ $internship->organisation->name }} · {{ $internship->location }} · {{ $internship->duration_weeks }} weeks</p></div><span class="slots">{{ max(0, $internship->slots_total - $internship->filled_slots) }} of {{ $internship->slots_total }} slots left</span></div><div class="row" style="margin-top:10px"><span class="tag {{ $internship->is_closing_soon ? 'warn' : '' }}">{{ $internship->is_closing_soon ? 'Closing soon · ' : 'Apply by ' }}{{ $internship->closes_at->format('j M') }}</span><a class="button light small" href="{{ route('internships.show', $internship) }}">View and apply</a></div></article>@empty<div class="item"><p>No matching open internships at the moment. <a style="color:var(--green)" href="{{ route('internships.index') }}">Browse all listings.</a></p></div>@endforelse</div></section>
 <aside class="grid" style="align-content:start"><section class="card"><span class="eyebrow">Application tracker</span><h2>Your applications</h2><div class="list">@forelse($applications as $application)<div class="item"><div class="row"><h3>{{ $application->internship->title }}</h3><span class="tag {{ in_array($application->status, ['interview', 'offered', 'placed']) ? 'warn' : '' }}">{{ ucfirst(str_replace('_', ' ', $application->status)) }}</span></div><p>{{ $application->internship->organisation->name }} · Applied {{ $application->created_at->format('j M') }}@if($application->interview_at) · Interview {{ $application->interview_at->format('j M, g:i a') }}@endif</p></div>@empty<p class="muted">No applications submitted yet.</p>@endforelse</div></section>
 <section class="card"><span class="eyebrow">University support</span>@if($supervisorAssignment)<h3>{{ $supervisorAssignment->supervisor->name }}</h3><p>Your assigned placement supervisor</p><a class="button light small" style="margin-top:12px" href="{{ route('dashboard.supervision') }}">Message / request visit</a>@else<h3>Supervisor not assigned yet</h3><p>Contact your university placement office to connect an approved supervisor.</p>@endif</section>

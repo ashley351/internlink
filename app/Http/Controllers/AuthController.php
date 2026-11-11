@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class AuthController extends Controller
@@ -19,13 +19,14 @@ class AuthController extends Controller
     public function login(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
+            'role' => ['required', Rule::in(User::ROLES)],
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             return back()->withErrors(['email' => 'Those sign-in details did not match our records.'])
-                ->onlyInput('email');
+                ->onlyInput('email', 'role');
         }
 
         $request->session()->regenerate();
