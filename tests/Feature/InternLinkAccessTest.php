@@ -2,27 +2,39 @@
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
 test('the landing page introduces the internship platform', function () {
     $this->get('/')
         ->assertOk()
-        ->assertSee('Placement season at a glance')
-        ->assertSee('Open internships')
-        ->assertSee('University supervisors');
+        ->assertSee('Turn what you learn')
+        ->assertSee('Explore internships')
+        ->assertSee('For universities')
+        ->assertSee('How it works');
 });
 
 test('a student can register and receives only the student role', function () {
+    Storage::fake('local');
+
     $this->post(route('register.store'), [
         'name' => 'Aisha Namuli',
         'email' => 'aisha@example.test',
         'role' => User::ROLE_STUDENT,
         'course' => 'Computer Science',
         'university' => 'Makerere University',
+        'phone' => '+256700000000',
+        'campus' => 'Main Campus',
+        'faculty' => 'Computing and Informatics',
+        'year_of_study' => '3',
+        'student_registration_number' => '24/U/1234',
+        'academic_interests' => 'Software engineering and accessible technology.',
+        'application_letter' => UploadedFile::fake()->create('application-letter.pdf', 100, 'application/pdf'),
         'password' => 'secure-pass-123',
         'password_confirmation' => 'secure-pass-123',
-    ])->assertRedirect(route('dashboard'));
+    ])->assertRedirect(route('dashboard.student'));
 
     $this->assertAuthenticated();
     expect(auth()->user()->role)->toBe(User::ROLE_STUDENT)
@@ -119,6 +131,8 @@ test('lecturer and organisation accounts require approval before sign in', funct
 });
 
 test('student registration only accepts a Kampala university', function () {
+    Storage::fake('local');
+
     $this->from(route('register'))
         ->post(route('register.store'), [
             'name' => 'Aisha Namuli',
@@ -126,6 +140,13 @@ test('student registration only accepts a Kampala university', function () {
             'role' => User::ROLE_STUDENT,
             'course' => 'Computer Science',
             'university' => 'Mbarara University',
+            'phone' => '+256700000000',
+            'campus' => 'Main Campus',
+            'faculty' => 'Computing and Informatics',
+            'year_of_study' => '3',
+            'student_registration_number' => '24/U/1235',
+            'academic_interests' => 'Software engineering and accessible technology.',
+            'application_letter' => UploadedFile::fake()->create('application-letter.pdf', 100, 'application/pdf'),
             'password' => 'secure-pass-123',
             'password_confirmation' => 'secure-pass-123',
         ])
@@ -137,7 +158,7 @@ test('student registration only accepts a Kampala university', function () {
         ->assertSee('University lecturer')
         ->assertSee('Organisation')
         ->assertSee('Administrator')
-        ->assertSee('University in Kampala')
+        ->assertSee('University or institution')
         ->assertSee('Kampala International University');
 });
 

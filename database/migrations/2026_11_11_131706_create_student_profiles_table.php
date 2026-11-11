@@ -13,6 +13,14 @@ return new class extends Migration
     {
         Schema::create('student_profiles', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
+            $table->string('phone', 30)->nullable();
+            $table->string('campus', 120)->nullable();
+            $table->string('faculty', 160)->nullable();
+            $table->unsignedTinyInteger('year_of_study')->nullable();
+            $table->string('student_registration_number', 100)->nullable()->unique();
+            $table->text('academic_interests')->nullable();
+            $table->string('application_letter_path')->nullable();
             $table->timestamps();
         });
     }

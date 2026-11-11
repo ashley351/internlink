@@ -6,8 +6,11 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Throwable;
 
 class AuthController extends Controller
 {
@@ -68,6 +71,19 @@ class AuthController extends Controller
                 'string',
                 Rule::in(config('internlink.universities')),
             ],
+            'phone' => ['required_if:role,student', 'nullable', 'string', 'max:30'],
+            'campus' => ['required_if:role,student', 'nullable', 'string', 'max:120'],
+            'faculty' => ['required_if:role,student', 'nullable', 'string', 'max:160'],
+            'year_of_study' => ['required_if:role,student', 'nullable', 'integer', 'min:1', 'max:12'],
+            'student_registration_number' => [
+                'required_if:role,student',
+                'nullable',
+                'string',
+                'max:100',
+                Rule::unique('student_profiles', 'student_registration_number'),
+            ],
+            'academic_interests' => ['required_if:role,student', 'nullable', 'string', 'max:2000'],
+            'application_letter' => ['required_if:role,student', 'nullable', 'file', 'mimes:pdf,doc,docx,odt', 'max:5120'],
             'admin_invitation_code' => [
                 'required_if:role,admin',
                 'nullable',
@@ -79,15 +95,45 @@ class AuthController extends Controller
         $role = $validated['role'];
         $requiresApproval = in_array($role, [User::ROLE_SUPERVISOR, User::ROLE_ORGANISATION], true);
 
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'role' => $role,
-            'is_approved' => ! $requiresApproval,
-            'course' => $validated['course'] ?? null,
-            'university' => $validated['university'] ?? null,
-        ]);
+        $applicationLetterPath = null;
+
+        if ($role === User::ROLE_STUDENT) {
+            $applicationLetterPath = $request->file('application_letter')->store('student-application-letters', 'local');
+        }
+
+        try {
+            $user = DB::transaction(function () use ($validated, $role, $requiresApproval, $applicationLetterPath): User {
+                $user = User::create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'password' => $validated['password'],
+                    'role' => $role,
+                    'is_approved' => ! $requiresApproval,
+                    'course' => $validated['course'] ?? null,
+                    'university' => $validated['university'] ?? null,
+                ]);
+
+                if ($role === User::ROLE_STUDENT) {
+                    $user->studentProfile()->create([
+                        'phone' => $validated['phone'],
+                        'campus' => $validated['campus'],
+                        'faculty' => $validated['faculty'],
+                        'year_of_study' => $validated['year_of_study'],
+                        'student_registration_number' => $validated['student_registration_number'],
+                        'academic_interests' => $validated['academic_interests'],
+                        'application_letter_path' => $applicationLetterPath,
+                    ]);
+                }
+
+                return $user;
+            });
+        } catch (Throwable $exception) {
+            if ($applicationLetterPath !== null) {
+                Storage::disk('local')->delete($applicationLetterPath);
+            }
+
+            throw $exception;
+        }
 
         if ($requiresApproval) {
             return redirect()->route('login')->with('status', 'Your account request was received. You can sign in once an administrator approves it.');
@@ -96,7 +142,7 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('dashboard');
+        return redirect()->route($role === User::ROLE_STUDENT ? 'dashboard.student' : 'dashboard');
     }
 
     public function logout(Request $request): RedirectResponse

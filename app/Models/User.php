@@ -66,6 +66,11 @@ class User extends Authenticatable
         return $this->hasMany(InternshipApplication::class, 'student_id');
     }
 
+    public function studentProfile(): HasOne
+    {
+        return $this->hasOne(StudentProfile::class);
+    }
+
     public function supervisorAssignment(): HasOne
     {
         return $this->hasOne(SupervisorAssignment::class, 'student_id');

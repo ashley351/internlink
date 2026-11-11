@@ -8,10 +8,117 @@ use App\Models\PlacementMessage;
 use App\Models\VisitRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class StudentController extends Controller
 {
+    public function showProfile(Request $request): View
+    {
+        $user = $request->user();
+        $profile = $user->studentProfile;
+        $completionFields = [
+            $user->name,
+            $user->email,
+            $user->university,
+            $user->course,
+            $profile?->phone,
+            $profile?->campus,
+            $profile?->faculty,
+            $profile?->year_of_study,
+            $profile?->student_registration_number,
+            $profile?->academic_interests,
+            $profile?->application_letter_path,
+        ];
+        $profileCompletion = (int) round(collect($completionFields)->filter(fn ($value) => filled($value))->count() / count($completionFields) * 100);
+
+        return view('student.profile', compact('user', 'profile', 'profileCompletion'));
+    }
+
+    public function updateProfile(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        $profile = $user->studentProfile;
+        $letterIsRequired = blank($profile?->application_letter_path);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:120'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['required', 'string', 'max:30'],
+            'university' => ['required', 'string', Rule::in(config('internlink.universities'))],
+            'campus' => ['required', 'string', 'max:120'],
+            'faculty' => ['required', 'string', 'max:160'],
+            'course' => ['required', 'string', 'max:120'],
+            'year_of_study' => ['required', 'integer', 'min:1', 'max:12'],
+            'student_registration_number' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('student_profiles', 'student_registration_number')->ignore($profile?->id),
+            ],
+            'academic_interests' => ['required', 'string', 'max:2000'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'application_letter' => [$letterIsRequired ? 'required' : 'nullable', 'file', 'mimes:pdf,doc,docx,odt', 'max:5120'],
+        ]);
+
+        $newLetterPath = $request->file('application_letter')?->store('student-application-letters', 'local');
+        $oldLetterPath = $profile?->application_letter_path;
+
+        try {
+            DB::transaction(function () use ($user, $profile, $validated, $newLetterPath): void {
+                $user->fill([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'university' => $validated['university'],
+                    'course' => $validated['course'],
+                ]);
+
+                if (filled($validated['password'] ?? null)) {
+                    $user->password = $validated['password'];
+                }
+
+                $user->save();
+
+                $user->studentProfile()->updateOrCreate([], [
+                    'phone' => $validated['phone'],
+                    'campus' => $validated['campus'],
+                    'faculty' => $validated['faculty'],
+                    'year_of_study' => $validated['year_of_study'],
+                    'student_registration_number' => $validated['student_registration_number'],
+                    'academic_interests' => $validated['academic_interests'],
+                    'application_letter_path' => $newLetterPath ?? $profile?->application_letter_path,
+                ]);
+            });
+        } catch (\Throwable $exception) {
+            if ($newLetterPath !== null) {
+                Storage::disk('local')->delete($newLetterPath);
+            }
+
+            throw $exception;
+        }
+
+        if ($newLetterPath !== null && $oldLetterPath !== null) {
+            Storage::disk('local')->delete($oldLetterPath);
+        }
+
+        return redirect()->route('student.profile')->with('status', 'Your student profile has been updated.');
+    }
+
+    public function downloadApplicationLetter(Request $request): BinaryFileResponse
+    {
+        $path = $request->user()->studentProfile?->application_letter_path;
+
+        abort_unless($path !== null && Storage::disk('local')->exists($path), 404);
+
+        return response()->download(
+            Storage::disk('local')->path($path),
+            'application-letter.'.pathinfo($path, PATHINFO_EXTENSION),
+        );
+    }
+
     public function dashboard(Request $request): View
     {
         $user = $request->user();

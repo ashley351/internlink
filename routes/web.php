@@ -39,6 +39,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/student', [StudentController::class, 'dashboard'])
         ->middleware('role:student')
         ->name('dashboard.student');
+    Route::get('/student/profile', [StudentController::class, 'showProfile'])
+        ->middleware('role:student')
+        ->name('student.profile');
+    Route::patch('/student/profile', [StudentController::class, 'updateProfile'])
+        ->middleware('role:student')
+        ->name('student.profile.update');
+    Route::get('/student/profile/application-letter', [StudentController::class, 'downloadApplicationLetter'])
+        ->middleware('role:student')
+        ->name('student.profile.application-letter');
     Route::get('/my-supervision', [StudentController::class, 'supervision'])
         ->middleware('role:student')
         ->name('dashboard.supervision');
