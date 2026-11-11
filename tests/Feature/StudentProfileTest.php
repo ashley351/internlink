@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Models\Institution;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -150,4 +151,62 @@ test('application letter uploads reject non-document files', function () {
         ->assertSessionHasErrors('application_letter');
 
     $this->assertDatabaseMissing('users', ['email' => 'invalid-letter@example.test']);
+});
+
+test('student registration shows one alphabetized searchable list of active Kampala institutions', function () {
+    $response = $this->get(route('register'))->assertOk()
+        ->assertSee('list="institution-options"', false)
+        ->assertSee('<datalist id="institution-options">', false)
+        ->assertSee('Islamic University in Uganda, Kampala Campus')
+        ->assertDontSee('Muteesa I Royal University')
+        ->assertDontSee('St. Peter’s University');
+
+    $optionNames = Institution::query()->where('is_active', true)->orderBy('name')->pluck('name')->all();
+    $sortedNames = $optionNames;
+    sort($sortedNames, SORT_STRING | SORT_FLAG_CASE);
+
+    expect($optionNames)->toBe($sortedNames)
+        ->and($optionNames)->toHaveCount(22);
+});
+
+test('only administrators can add, edit and deactivate institutions without duplicates', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $student = User::factory()->create(['role' => User::ROLE_STUDENT]);
+    $newInstitution = [
+        'name' => 'Example Kampala Institution',
+        'accreditation_status' => 'NCHE registered institution',
+        'source_url' => 'https://unche.or.ug/universities/',
+    ];
+
+    $this->actingAs($student)->get(route('admin.institutions.index'))->assertForbidden();
+    $this->actingAs($student)->post(route('admin.institutions.store'), $newInstitution)->assertForbidden();
+
+    $this->actingAs($admin)->get(route('admin.institutions.index'))->assertOk()
+        ->assertSee('Kampala institutions')
+        ->assertSee('Aga Khan University');
+    $this->actingAs($admin)->post(route('admin.institutions.store'), $newInstitution)
+        ->assertRedirect(route('admin.institutions.index'));
+
+    $institution = Institution::query()->where('name', $newInstitution['name'])->firstOrFail();
+    expect($institution->district)->toBe('Kampala')
+        ->and($institution->is_active)->toBeTrue();
+
+    $this->actingAs($admin)->post(route('admin.institutions.store'), [
+        ...$newInstitution,
+        'name' => '  example kampala institution  ',
+    ])->assertSessionHasErrors('name');
+
+    $this->actingAs($admin)->patch(route('admin.institutions.update', $institution), [
+        ...$newInstitution,
+        'name' => 'Updated Kampala Institution',
+    ])->assertRedirect(route('admin.institutions.index'));
+    expect($institution->fresh()->name)->toBe('Updated Kampala Institution');
+
+    $this->actingAs($admin)->patch(route('admin.institutions.status', $institution))
+        ->assertRedirect(route('admin.institutions.index'));
+    expect($institution->fresh()->is_active)->toBeFalse();
+    $this->get(route('register'))->assertDontSee('Updated Kampala Institution');
+
+    $this->actingAs($admin)->patch(route('admin.institutions.status', $institution));
+    expect($institution->fresh()->is_active)->toBeTrue();
 });

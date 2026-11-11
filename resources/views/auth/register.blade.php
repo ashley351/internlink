@@ -75,12 +75,13 @@
                 <div class="registration-fields">
                     <div class="field">
                         <label for="university">University or institution</label>
-                        <select class="input" id="university" name="university">
-                            <option value="">Choose your institution</option>
-                            @foreach($universities as $university)
-                                <option value="{{ $university }}" @selected(old('university') === $university)>{{ $university }}</option>
+                        <input class="input" id="university" name="university" type="text" list="institution-options" value="{{ old('university') }}" placeholder="Type to search institutions" autocomplete="off">
+                        <datalist id="institution-options">
+                            @foreach($institutions as $institution)
+                                <option value="{{ $institution->name }}"></option>
                             @endforeach
-                        </select>
+                        </datalist>
+                        <small class="muted">Start typing to filter the A–Z institution list, then select a result.</small>
                         @error('university')<small class="registration-error">{{ $message }}</small>@enderror
                     </div>
                     <div class="field">
@@ -119,12 +120,12 @@
             <section class="registration-section" data-role-fields="supervisor" @if($selectedRole !== \App\Models\User::ROLE_SUPERVISOR) hidden @endif>
                 <div class="field">
                     <label for="university-supervisor">University in Kampala</label>
-                    <select class="input" id="university-supervisor" name="university">
-                        <option value="">Choose your university</option>
-                        @foreach($universities as $university)
-                            <option value="{{ $university }}" @selected(old('university') === $university)>{{ $university }}</option>
+                    <input class="input" id="university-supervisor" name="university" type="text" list="supervisor-institution-options" value="{{ old('university') }}" placeholder="Type to search institutions" autocomplete="off">
+                    <datalist id="supervisor-institution-options">
+                        @foreach($institutions as $institution)
+                            <option value="{{ $institution->name }}"></option>
                         @endforeach
-                    </select>
+                    </datalist>
                     @error('university')<small class="registration-error">{{ $message }}</small>@enderror
                 </div>
             </section>

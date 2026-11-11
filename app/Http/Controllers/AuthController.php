@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Institution;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -47,7 +48,7 @@ class AuthController extends Controller
     public function showRegister(): View
     {
         return view('auth.register', [
-            'universities' => config('internlink.universities'),
+            'institutions' => Institution::query()->where('is_active', true)->orderBy('name')->get(),
             'adminSignupEnabled' => filled(config('internlink.admin_invitation_code')),
         ]);
     }
@@ -69,7 +70,7 @@ class AuthController extends Controller
                 'required_if:role,student,supervisor',
                 'nullable',
                 'string',
-                Rule::in(config('internlink.universities')),
+                Rule::exists('institutions', 'name')->where('is_active', true),
             ],
             'phone' => ['required_if:role,student', 'nullable', 'string', 'max:30'],
             'campus' => ['required_if:role,student', 'nullable', 'string', 'max:120'],
@@ -116,6 +117,7 @@ class AuthController extends Controller
                 if ($role === User::ROLE_STUDENT) {
                     $user->studentProfile()->create([
                         'phone' => $validated['phone'],
+                        'institution_id' => Institution::query()->where('name', $validated['university'])->value('id'),
                         'campus' => $validated['campus'],
                         'faculty' => $validated['faculty'],
                         'year_of_study' => $validated['year_of_study'],

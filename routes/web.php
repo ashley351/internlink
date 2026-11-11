@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InternshipController;
+use App\Http\Controllers\InstitutionController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SupervisorController;
@@ -60,6 +61,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin', [AdminController::class, 'dashboard'])
         ->middleware('role:admin')
         ->name('dashboard.admin');
+    Route::get('/admin/institutions', [InstitutionController::class, 'index'])
+        ->middleware('role:admin')
+        ->name('admin.institutions.index');
+    Route::post('/admin/institutions', [InstitutionController::class, 'store'])
+        ->middleware('role:admin')
+        ->name('admin.institutions.store');
+    Route::patch('/admin/institutions/{institution}', [InstitutionController::class, 'update'])
+        ->middleware('role:admin')
+        ->name('admin.institutions.update');
+    Route::patch('/admin/institutions/{institution}/status', [InstitutionController::class, 'toggleActive'])
+        ->middleware('role:admin')
+        ->name('admin.institutions.status');
 
     Route::post('/internships/{internship}/applications', [InternshipController::class, 'apply'])
         ->middleware('role:student')->name('internships.apply');

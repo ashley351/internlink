@@ -20,10 +20,16 @@ class StudentProfile extends Model
         'student_registration_number',
         'academic_interests',
         'application_letter_path',
+        'institution_id',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function institution(): BelongsTo
+    {
+        return $this->belongsTo(Institution::class);
     }
 }

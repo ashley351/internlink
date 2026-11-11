@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Internship;
+use App\Models\Institution;
 use App\Models\LogbookEntry;
 use App\Models\PlacementMessage;
 use App\Models\VisitRequest;
@@ -34,8 +35,13 @@ class StudentController extends Controller
             $profile?->application_letter_path,
         ];
         $profileCompletion = (int) round(collect($completionFields)->filter(fn ($value) => filled($value))->count() / count($completionFields) * 100);
+        $institutions = Institution::query()
+            ->where('is_active', true)
+            ->when($profile?->institution_id, fn ($query) => $query->orWhereKey($profile->institution_id))
+            ->orderBy('name')
+            ->get();
 
-        return view('student.profile', compact('user', 'profile', 'profileCompletion'));
+        return view('student.profile', compact('user', 'profile', 'profileCompletion', 'institutions'));
     }
 
     public function updateProfile(Request $request): RedirectResponse
@@ -48,7 +54,17 @@ class StudentController extends Controller
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => ['required', 'string', 'max:30'],
-            'university' => ['required', 'string', Rule::in(config('internlink.universities'))],
+            'university' => [
+                'required',
+                'string',
+                Rule::exists('institutions', 'name')->where(function ($query) use ($profile): void {
+                    $query->where('is_active', true);
+
+                    if ($profile?->institution_id !== null) {
+                        $query->orWhere('id', $profile->institution_id);
+                    }
+                }),
+            ],
             'campus' => ['required', 'string', 'max:120'],
             'faculty' => ['required', 'string', 'max:160'],
             'course' => ['required', 'string', 'max:120'],
@@ -89,6 +105,7 @@ class StudentController extends Controller
                     'year_of_study' => $validated['year_of_study'],
                     'student_registration_number' => $validated['student_registration_number'],
                     'academic_interests' => $validated['academic_interests'],
+                    'institution_id' => Institution::query()->where('name', $validated['university'])->value('id'),
                     'application_letter_path' => $newLetterPath ?? $profile?->application_letter_path,
                 ]);
             });

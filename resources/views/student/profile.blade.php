@@ -51,7 +51,7 @@
         <section class="card profile-section">
             <h2>Academic information</h2><p>Your institution and programme details.</p>
             <div class="profile-fields">
-                <div class="field"><label for="university">University or institution</label><select class="input" id="university" name="university" required><option value="">Choose your institution</option>@foreach(config('internlink.universities') as $university)<option value="{{ $university }}" @selected(old('university', $user->university) === $university)>{{ $university }}</option>@endforeach</select></div>
+                <div class="field"><label for="university">University or institution</label><input class="input" id="university" name="university" type="text" list="profile-institution-options" value="{{ old('university', $profile?->institution?->name ?? $user->university) }}" required placeholder="Type to search institutions" autocomplete="off"><datalist id="profile-institution-options">@foreach($institutions as $institution)<option value="{{ $institution->name }}"></option>@endforeach</datalist><small class="muted">Start typing to filter the A–Z institution list.</small></div>
                 <div class="field"><label for="campus">Campus</label><input class="input" id="campus" name="campus" value="{{ old('campus', $profile?->campus) }}" required></div>
                 <div class="field"><label for="faculty">Faculty or school</label><input class="input" id="faculty" name="faculty" value="{{ old('faculty', $profile?->faculty) }}" required></div>
                 <div class="field"><label for="course">Course or academic programme</label><input class="input" id="course" name="course" value="{{ old('course', $user->course) }}" required></div>
