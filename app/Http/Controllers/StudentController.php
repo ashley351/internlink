@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Internship;
 use App\Models\Institution;
+use App\Models\Internship;
 use App\Models\LogbookEntry;
 use App\Models\PlacementMessage;
 use App\Models\VisitRequest;
@@ -37,7 +37,7 @@ class StudentController extends Controller
         $profileCompletion = (int) round(collect($completionFields)->filter(fn ($value) => filled($value))->count() / count($completionFields) * 100);
         $institutions = Institution::query()
             ->where('is_active', true)
-            ->when($profile?->institution_id, fn ($query) => $query->orWhereKey($profile->institution_id))
+            ->when($profile?->institution_id, fn ($query) => $query->orWhere('id', $profile->institution_id))
             ->orderBy('name')
             ->get();
 

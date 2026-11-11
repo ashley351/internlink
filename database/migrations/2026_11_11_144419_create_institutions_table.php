@@ -12,16 +12,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('institutions', function (Blueprint $table) {
-            $table->id();
-            $table->string('name')->unique();
-            $table->string('normalized_name')->unique();
-            $table->string('district', 80)->default('Kampala');
-            $table->string('accreditation_status', 180);
-            $table->string('source_url', 500);
-            $table->boolean('is_active')->default(true)->index();
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('institutions')) {
+            Schema::create('institutions', function (Blueprint $table) {
+                $table->id();
+                $table->string('name')->unique();
+                $table->string('normalized_name')->unique();
+                $table->string('district', 80)->default('Kampala');
+                $table->string('accreditation_status', 180);
+                $table->string('source_url', 500);
+                $table->boolean('is_active')->default(true)->index();
+                $table->timestamps();
+            });
+        }
 
         $now = now();
         $institutions = [
@@ -49,7 +51,7 @@ return new class extends Migration
             ['Victoria University', 'Chartered University'],
         ];
 
-        DB::table('institutions')->insert(array_map(fn (array $institution): array => [
+        DB::table('institutions')->insertOrIgnore(array_map(fn (array $institution): array => [
             'name' => $institution[0],
             'normalized_name' => mb_strtolower($institution[0]),
             'district' => 'Kampala',
@@ -60,15 +62,20 @@ return new class extends Migration
             'updated_at' => $now,
         ], $institutions));
 
-        Schema::table('student_profiles', function (Blueprint $table): void {
-            $table->foreignId('institution_id')->nullable()->after('user_id')->constrained()->nullOnDelete();
-        });
+        if (Schema::hasTable('student_profiles') && ! Schema::hasColumn('student_profiles', 'institution_id')) {
+            Schema::table('student_profiles', function (Blueprint $table): void {
+                $table->foreignId('institution_id')->nullable()->after('user_id')->constrained()->nullOnDelete();
+            });
+        }
 
-        foreach (DB::table('institutions')->get(['id', 'name']) as $institution) {
-            DB::table('student_profiles')
-                ->join('users', 'users.id', '=', 'student_profiles.user_id')
-                ->where('users.university', $institution->name)
-                ->update(['student_profiles.institution_id' => $institution->id]);
+        if (Schema::hasTable('student_profiles') && Schema::hasColumn('student_profiles', 'institution_id')) {
+            foreach (DB::table('institutions')->get(['id', 'name']) as $institution) {
+                DB::table('student_profiles')
+                    ->join('users', 'users.id', '=', 'student_profiles.user_id')
+                    ->where('users.university', $institution->name)
+                    ->whereNull('student_profiles.institution_id')
+                    ->update(['student_profiles.institution_id' => $institution->id]);
+            }
         }
     }
 

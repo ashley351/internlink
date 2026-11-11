@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\User;
 use App\Models\Institution;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -37,7 +37,8 @@ test('a student can register with their profile and a private application letter
 
     $profile = $user->studentProfile()->firstOrFail();
     expect($profile->phone)->toBe('+256700000000')
-        ->and($profile->year_of_study)->toBe(3);
+        ->and($profile->year_of_study)->toBe(3)
+        ->and($profile->institution?->name)->toBe('Makerere University');
     Storage::disk('local')->assertExists($profile->application_letter_path);
 
     $this->get(route('student.profile'))->assertOk()
@@ -167,6 +168,27 @@ test('student registration shows one alphabetized searchable list of active Kamp
 
     expect($optionNames)->toBe($sortedNames)
         ->and($optionNames)->toHaveCount(22);
+});
+
+test('institutions migration can safely rerun when its table already exists', function () {
+    $institution = Institution::query()->where('name', 'Makerere University')->firstOrFail();
+    $institution->update([
+        'is_active' => false,
+        'accreditation_status' => 'Administrator-verified status',
+    ]);
+    $student = User::factory()->create([
+        'role' => User::ROLE_STUDENT,
+        'university' => 'Makerere University',
+    ]);
+    $profile = $student->studentProfile()->create();
+
+    $migration = require database_path('migrations/2026_11_11_144419_create_institutions_table.php');
+    $migration->up();
+
+    expect(Institution::query()->count())->toBe(22)
+        ->and($institution->fresh()->is_active)->toBeFalse()
+        ->and($institution->fresh()->accreditation_status)->toBe('Administrator-verified status')
+        ->and($profile->fresh()->institution_id)->toBe($institution->id);
 });
 
 test('only administrators can add, edit and deactivate institutions without duplicates', function () {

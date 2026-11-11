@@ -69,21 +69,24 @@
                 </div>
             </section>
 
+            <section class="registration-section" data-role-fields="student supervisor" @if(! in_array($selectedRole, [\App\Models\User::ROLE_STUDENT, \App\Models\User::ROLE_SUPERVISOR], true)) hidden @endif>
+                <div class="field">
+                    <label for="university">University or institution</label>
+                    <input class="input" id="university" name="university" type="text" list="institution-options" value="{{ old('university') }}" placeholder="Type to search institutions" autocomplete="off">
+                    <datalist id="institution-options">
+                        @foreach($institutions as $institution)
+                            <option value="{{ $institution->name }}"></option>
+                        @endforeach
+                    </datalist>
+                    <small class="muted">Start typing to filter the A–Z institution list, then select a result.</small>
+                    @error('university')<small class="registration-error">{{ $message }}</small>@enderror
+                </div>
+            </section>
+
             <section class="registration-section" data-role-fields="student" @if($selectedRole !== \App\Models\User::ROLE_STUDENT) hidden @endif>
                 <h2>Academic information</h2>
                 <p>These details help connect your studies with suitable placement opportunities.</p>
                 <div class="registration-fields">
-                    <div class="field">
-                        <label for="university">University or institution</label>
-                        <input class="input" id="university" name="university" type="text" list="institution-options" value="{{ old('university') }}" placeholder="Type to search institutions" autocomplete="off">
-                        <datalist id="institution-options">
-                            @foreach($institutions as $institution)
-                                <option value="{{ $institution->name }}"></option>
-                            @endforeach
-                        </datalist>
-                        <small class="muted">Start typing to filter the A–Z institution list, then select a result.</small>
-                        @error('university')<small class="registration-error">{{ $message }}</small>@enderror
-                    </div>
                     <div class="field">
                         <label for="campus">Campus</label>
                         <input class="input" id="campus" name="campus" value="{{ old('campus') }}">
@@ -114,19 +117,6 @@
                         <input class="input" id="student_registration_number" name="student_registration_number" value="{{ old('student_registration_number') }}">
                         @error('student_registration_number')<small class="registration-error">{{ $message }}</small>@enderror
                     </div>
-                </div>
-            </section>
-
-            <section class="registration-section" data-role-fields="supervisor" @if($selectedRole !== \App\Models\User::ROLE_SUPERVISOR) hidden @endif>
-                <div class="field">
-                    <label for="university-supervisor">University in Kampala</label>
-                    <input class="input" id="university-supervisor" name="university" type="text" list="supervisor-institution-options" value="{{ old('university') }}" placeholder="Type to search institutions" autocomplete="off">
-                    <datalist id="supervisor-institution-options">
-                        @foreach($institutions as $institution)
-                            <option value="{{ $institution->name }}"></option>
-                        @endforeach
-                    </datalist>
-                    @error('university')<small class="registration-error">{{ $message }}</small>@enderror
                 </div>
             </section>
 
