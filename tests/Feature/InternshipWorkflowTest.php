@@ -106,7 +106,17 @@ test('kampala placement moves through application, supervision and logbook revie
     $this->actingAs($organisation)->get(route('dashboard.organisation'))
         ->assertOk()->assertSee('Applications per week');
     $this->actingAs($admin)->get(route('dashboard.admin'))
-        ->assertOk()->assertSee('Listing review');
+        ->assertOk()
+        ->assertSee('Listing review')
+        ->assertSee('All internship applications')
+        ->assertSee('All supervision assignments')
+        ->assertSee('All student logbooks')
+        ->assertSee('All supervision visits')
+        ->assertSee('All supervision messages')
+        ->assertSee('Completed onboarding and implemented a small feature for the team.')
+        ->assertSee('I have submitted my first weekly logbook.')
+        ->assertSee('Makerere University, Kampala')
+        ->assertSee($supervisor->name);
 });
 
 test('organisations cannot update applications for another organisation', function () {
@@ -133,6 +143,34 @@ test('organisations cannot update applications for another organisation', functi
     $this->actingAs($outsider)->patch(route('organisation.applications.update', $application), [
         'status' => 'shortlisted',
     ])->assertForbidden();
+});
+
+test('lecturers only see visits assigned to them for their current students', function () {
+    $supervisor = User::factory()->create(['role' => User::ROLE_SUPERVISOR]);
+    $otherSupervisor = User::factory()->create(['role' => User::ROLE_SUPERVISOR]);
+    $student = User::factory()->create(['role' => User::ROLE_STUDENT]);
+
+    $supervisor->supervisedStudents()->create(['student_id' => $student->id]);
+
+    VisitRequest::create([
+        'student_id' => $student->id,
+        'supervisor_id' => $supervisor->id,
+        'requested_for' => now()->addDays(2),
+        'location' => 'Assigned lecturer visit',
+        'notes' => 'This request belongs to the assigned lecturer.',
+    ]);
+    VisitRequest::create([
+        'student_id' => $student->id,
+        'supervisor_id' => $otherSupervisor->id,
+        'requested_for' => now()->addDays(3),
+        'location' => 'Other lecturer visit',
+        'notes' => 'This request belongs to a different lecturer.',
+    ]);
+
+    $this->actingAs($supervisor)->get(route('dashboard.university'))
+        ->assertOk()
+        ->assertSee('Assigned lecturer visit')
+        ->assertDontSee('Other lecturer visit');
 });
 
 test('students can search internships by organisation and role', function () {

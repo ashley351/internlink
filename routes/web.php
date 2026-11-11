@@ -75,6 +75,8 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/admin/users/{user}/role', [AdminController::class, 'updateRole'])
         ->middleware('role:admin')->name('admin.users.role');
+    Route::patch('/admin/users/{user}/approve', [AdminController::class, 'approveAccount'])
+        ->middleware('role:admin')->name('admin.users.approve');
     Route::post('/admin/supervisor-assignments', [AdminController::class, 'assignSupervisor'])
         ->middleware('role:admin')->name('admin.supervisors.assign');
     Route::patch('/admin/internships/{internship}', [AdminController::class, 'moderateInternship'])

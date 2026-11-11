@@ -15,13 +15,16 @@ class SupervisorController extends Controller
     {
         $students = $request->user()->supervisedStudents()->with('student')->get()->pluck('student');
         $studentIds = $students->pluck('id');
+        $supervisor = $request->user();
 
         return view('workspaces.supervisor', [
-            'user' => $request->user(),
+            'user' => $supervisor,
             'students' => $students,
             'logbooks' => LogbookEntry::whereIn('student_id', $studentIds)->with('student')->latest()->get(),
-            'visits' => VisitRequest::whereIn('student_id', $studentIds)->with('student')->latest('requested_for')->get(),
-            'messages' => PlacementMessage::whereIn('student_id', $studentIds)->where('supervisor_id', $request->user()->id)->with('sender')->oldest()->get(),
+            'visits' => VisitRequest::whereIn('student_id', $studentIds)
+                ->where('supervisor_id', $supervisor->id)
+                ->with('student')->latest('requested_for')->get(),
+            'messages' => PlacementMessage::whereIn('student_id', $studentIds)->where('supervisor_id', $supervisor->id)->with('sender')->oldest()->get(),
         ]);
     }
 
