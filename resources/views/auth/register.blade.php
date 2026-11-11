@@ -83,59 +83,6 @@
                 </div>
             </section>
 
-            <section class="registration-section" data-role-fields="student" @if($selectedRole !== \App\Models\User::ROLE_STUDENT) hidden @endif>
-                <h2>Academic information</h2>
-                <p>These details help connect your studies with suitable placement opportunities.</p>
-                <div class="registration-fields">
-                    <div class="field">
-                        <label for="campus">Campus</label>
-                        <input class="input" id="campus" name="campus" value="{{ old('campus') }}">
-                        @error('campus')<small class="registration-error">{{ $message }}</small>@enderror
-                    </div>
-                    <div class="field">
-                        <label for="faculty">Faculty or school</label>
-                        <input class="input" id="faculty" name="faculty" value="{{ old('faculty') }}">
-                        @error('faculty')<small class="registration-error">{{ $message }}</small>@enderror
-                    </div>
-                    <div class="field">
-                        <label for="course">Course or academic programme</label>
-                        <input class="input" id="course" name="course" value="{{ old('course') }}">
-                        @error('course')<small class="registration-error">{{ $message }}</small>@enderror
-                    </div>
-                    <div class="field">
-                        <label for="year_of_study">Year of study</label>
-                        <select class="input" id="year_of_study" name="year_of_study">
-                            <option value="">Choose your year</option>
-                            @foreach(range(1, 12) as $year)
-                                <option value="{{ $year }}" @selected((string) old('year_of_study') === (string) $year)>Year {{ $year }}</option>
-                            @endforeach
-                        </select>
-                        @error('year_of_study')<small class="registration-error">{{ $message }}</small>@enderror
-                    </div>
-                    <div class="field">
-                        <label for="student_registration_number">Student registration number</label>
-                        <input class="input" id="student_registration_number" name="student_registration_number" value="{{ old('student_registration_number') }}">
-                        @error('student_registration_number')<small class="registration-error">{{ $message }}</small>@enderror
-                    </div>
-                </div>
-            </section>
-
-            <section class="registration-section" data-role-fields="student" @if($selectedRole !== \App\Models\User::ROLE_STUDENT) hidden @endif>
-                <h2>Application information</h2>
-                <p>Upload an application letter—not a CV. Accepted formats: PDF, DOC, DOCX or ODT, up to 5 MB.</p>
-                <div class="field">
-                    <label for="academic_interests">Academic interests</label>
-                    <textarea class="input" id="academic_interests" name="academic_interests" rows="4" maxlength="2000" placeholder="Tell us about the subjects or areas you are interested in">{{ old('academic_interests') }}</textarea>
-                    @error('academic_interests')<small class="registration-error">{{ $message }}</small>@enderror
-                </div>
-                <div class="field">
-                    <label for="application_letter">Application letter</label>
-                    <input class="input" id="application_letter" name="application_letter" type="file" accept=".pdf,.doc,.docx,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text">
-                    <small class="muted">Your document is stored privately and is only accessible from your account.</small>
-                    @error('application_letter')<small class="registration-error">{{ $message }}</small>@enderror
-                </div>
-            </section>
-
             <div data-role-fields="admin" @if($selectedRole !== \App\Models\User::ROLE_ADMIN) hidden @endif>
                 <div class="field">
                     <label for="admin_invitation_code">Administrator invitation code</label>
@@ -161,7 +108,7 @@
             section.hidden = !isVisible;
             section.querySelectorAll('input, select, textarea').forEach((field) => {
                 field.disabled = !isVisible;
-                field.required = isVisible && ['university', 'university-supervisor', 'course', 'phone', 'campus', 'faculty', 'year_of_study', 'student_registration_number', 'academic_interests', 'application_letter', 'admin_invitation_code'].includes(field.id);
+                field.required = isVisible && ['university', 'phone', 'admin_invitation_code'].includes(field.id);
             });
         });
         nameLabel.textContent = roleSelect.value === '{{ \App\Models\User::ROLE_ORGANISATION }}' ? 'Organisation name' : 'Full name';

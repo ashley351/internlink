@@ -5,7 +5,9 @@ use App\Models\InternshipApplication;
 use App\Models\LogbookEntry;
 use App\Models\User;
 use App\Models\VisitRequest;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
@@ -23,6 +25,10 @@ test('kampala placement moves through application, supervision and logbook revie
         'title' => 'Software Engineering Intern',
         'field' => 'Technology',
         'description' => str_repeat('Build and test useful software with a Kampala product team. ', 2),
+        'responsibilities' => 'Implement and test assigned software features.',
+        'required_qualifications' => 'Current computer science student with basic programming skills.',
+        'payment_information' => 'Payment details will be discussed during interviews.',
+        'application_requirements' => 'Include an introductory letter addressed to the employer.',
         'eligible_courses' => ['Computer Science'],
         'slots_total' => 2,
         'duration_weeks' => 12,
@@ -30,7 +36,9 @@ test('kampala placement moves through application, supervision and logbook revie
     ])->assertRedirect();
 
     $internship = Internship::firstOrFail();
-    expect($internship->status)->toBe('pending');
+    expect($internship->status)->toBe('pending')
+        ->and($internship->responsibilities)->toBe('Implement and test assigned software features.')
+        ->and($internship->application_requirements)->toBe('Include an introductory letter addressed to the employer.');
 
     $this->actingAs($admin)->patch(route('admin.internships.moderate', $internship), [
         'status' => 'open',
@@ -217,4 +225,229 @@ test('students can search internships by organisation and role', function () {
         ->assertOk()
         ->assertSee('Software Engineering Intern')
         ->assertDontSee('Design Intern');
+});
+
+test('public internship browse hides the sample cards without deleting listing records', function () {
+    $organisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'email' => 'employer@internlink.test',
+        'name' => 'BrightLabs Kampala',
+    ]);
+    $realOrganisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'name' => 'Independent Kampala Employer',
+    ]);
+
+    foreach ([
+        'Product Design Intern',
+        'Finance Operations Intern',
+        'Software Engineering Intern',
+        'Community Outreach Intern',
+    ] as $title) {
+        Internship::create([
+            'organisation_id' => $organisation->id,
+            'title' => $title,
+            'field' => 'Technology',
+            'description' => 'An open Kampala internship opportunity.',
+            'location' => 'Kampala',
+            'slots_total' => 2,
+            'duration_weeks' => 8,
+            'closes_at' => today()->addDays(14),
+            'status' => 'open',
+        ]);
+    }
+
+    Internship::create([
+        'organisation_id' => $realOrganisation->id,
+        'title' => 'Software Engineering Intern',
+        'field' => 'Technology',
+        'description' => 'A real Kampala internship opportunity.',
+        'location' => 'Kampala',
+        'slots_total' => 2,
+        'duration_weeks' => 8,
+        'closes_at' => today()->addDays(14),
+        'status' => 'open',
+    ]);
+
+    $this->get(route('internships.index'))
+        ->assertOk()
+        ->assertDontSee('Product Design Intern')
+        ->assertDontSee('Finance Operations Intern')
+        ->assertSee('Software Engineering Intern')
+        ->assertSee('Community Outreach Intern');
+
+    expect(Internship::query()->count())->toBe(5);
+});
+
+test('students can search and filter open Kampala opportunities by organisation, field, location and duration', function () {
+    $targetOrganisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'name' => 'Northstar Digital',
+    ]);
+    $otherOrganisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'name' => 'Other Kampala Employer',
+    ]);
+
+    Internship::create([
+        'organisation_id' => $targetOrganisation->id,
+        'title' => 'Junior Data Analyst',
+        'field' => 'Data Science',
+        'description' => 'Analyse business data and prepare reports for Kampala teams.',
+        'location' => 'Kampala Central',
+        'slots_total' => 3,
+        'duration_weeks' => 12,
+        'closes_at' => today()->addDays(18),
+        'status' => 'open',
+    ]);
+    Internship::create([
+        'organisation_id' => $otherOrganisation->id,
+        'title' => 'Junior Data Analyst',
+        'field' => 'Data Science',
+        'description' => 'Analyse business data and prepare reports for Kampala teams.',
+        'location' => 'Kampala',
+        'slots_total' => 3,
+        'duration_weeks' => 8,
+        'closes_at' => today()->addDays(18),
+        'status' => 'open',
+    ]);
+
+    $this->get(route('internships.index', [
+        'q' => 'Analyst',
+        'field' => 'Data',
+        'location' => 'Central',
+        'organization' => 'Northstar',
+        'duration_weeks' => 12,
+    ]))->assertOk()
+        ->assertSee('Junior Data Analyst')
+        ->assertSee('Northstar Digital')
+        ->assertSee('value="Northstar"', false)
+        ->assertDontSee('Other Kampala Employer');
+
+    $this->get(route('internships.index'))
+        ->assertOk()
+        ->assertSee('id="organization-filter"', false)
+        ->assertSee('name="organization"', false)
+        ->assertDontSee('<select id="organization-filter"', false);
+
+    $this->get(route('internships.index', ['organization' => 'Other Kampala']))
+        ->assertOk()
+        ->assertSee('Other Kampala Employer')
+        ->assertDontSee('Northstar Digital');
+});
+
+test('public internship search excludes expired, unpublished and filled opportunities', function () {
+    $organisation = User::factory()->create(['role' => User::ROLE_ORGANISATION, 'name' => 'Current Employer']);
+    $baseListing = [
+        'organisation_id' => $organisation->id,
+        'field' => 'Technology',
+        'description' => 'A current software placement in Kampala.',
+        'location' => 'Kampala',
+        'duration_weeks' => 12,
+        'closes_at' => today()->addDays(10),
+    ];
+
+    $open = Internship::create([...$baseListing, 'title' => 'Open Role', 'slots_total' => 1, 'status' => 'open']);
+    Internship::create([...$baseListing, 'title' => 'Expired Role', 'slots_total' => 1, 'status' => 'open', 'closes_at' => today()->subDay()]);
+    Internship::create([...$baseListing, 'title' => 'Pending Role', 'slots_total' => 1, 'status' => 'pending']);
+    Internship::create([...$baseListing, 'title' => 'Filled Role', 'slots_total' => 1, 'status' => 'open']);
+    InternshipApplication::create([
+        'internship_id' => Internship::query()->where('title', 'Filled Role')->value('id'),
+        'student_id' => User::factory()->create(['role' => User::ROLE_STUDENT])->id,
+        'cover_letter' => str_repeat('I have relevant skills and I am interested in this placement. ', 2),
+        'status' => 'placed',
+    ]);
+
+    $this->get(route('internships.index'))
+        ->assertOk()
+        ->assertSee('Open Role')
+        ->assertDontSee('Expired Role')
+        ->assertDontSee('Pending Role')
+        ->assertDontSee('Filled Role');
+
+    $this->get(route('internships.show', $open))->assertOk();
+});
+
+test('internship detail page displays employer-provided role information and contact', function () {
+    $organisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'name' => 'Northstar Digital',
+        'email' => 'careers@northstar.example.test',
+    ]);
+    $internship = Internship::create([
+        'organisation_id' => $organisation->id,
+        'title' => 'Data Intern',
+        'field' => 'Data Science',
+        'description' => 'Work with the team on analysis projects.',
+        'responsibilities' => 'Prepare datasets and summarize findings.',
+        'required_qualifications' => 'Basic statistics and spreadsheet skills.',
+        'payment_information' => 'Payment details will be discussed by the employer.',
+        'application_requirements' => 'Submit an introductory letter addressed to Northstar Digital.',
+        'eligible_courses' => ['Statistics', 'Computer Science'],
+        'location' => 'Kampala',
+        'slots_total' => 2,
+        'duration_weeks' => 10,
+        'closes_at' => today()->addDays(20),
+        'status' => 'open',
+    ]);
+
+    $this->get(route('internships.show', $internship))
+        ->assertOk()
+        ->assertSee('Prepare datasets and summarize findings.')
+        ->assertSee('Basic statistics and spreadsheet skills.')
+        ->assertSee('Payment details will be discussed by the employer.')
+        ->assertSee('Submit an introductory letter addressed to Northstar Digital.')
+        ->assertSee('careers@northstar.example.test')
+        ->assertSee('Data Intern');
+});
+
+test('internship detail migration safely adds missing fields without affecting listings', function () {
+    $organisation = User::factory()->create(['role' => User::ROLE_ORGANISATION]);
+    $internship = Internship::create([
+        'organisation_id' => $organisation->id,
+        'title' => 'Existing listing',
+        'field' => 'Technology',
+        'description' => 'Existing description that must remain unchanged.',
+        'location' => 'Kampala',
+        'slots_total' => 2,
+        'duration_weeks' => 8,
+        'closes_at' => today()->addDays(10),
+        'status' => 'open',
+    ]);
+
+    Schema::table('internships', function (Blueprint $table): void {
+        $table->dropColumn(['responsibilities', 'required_qualifications', 'payment_information', 'application_requirements']);
+    });
+
+    $migration = require database_path('migrations/2026_11_11_192918_add_internship_public_detail_fields.php');
+    $migration->up();
+
+    expect(Schema::hasColumn('internships', 'responsibilities'))->toBeTrue()
+        ->and(Schema::hasColumn('internships', 'required_qualifications'))->toBeTrue()
+        ->and(Schema::hasColumn('internships', 'payment_information'))->toBeTrue()
+        ->and(Schema::hasColumn('internships', 'application_requirements'))->toBeTrue()
+        ->and($internship->fresh()->description)->toBe('Existing description that must remain unchanged.');
+});
+
+test('internship detail migration can safely rerun after a partial application', function () {
+    $organisation = User::factory()->create(['role' => User::ROLE_ORGANISATION]);
+    $internship = Internship::create([
+        'organisation_id' => $organisation->id,
+        'title' => 'Retry-safe listing',
+        'field' => 'Technology',
+        'description' => 'Keep this current internship record unchanged.',
+        'location' => 'Kampala',
+        'slots_total' => 1,
+        'duration_weeks' => 8,
+        'closes_at' => today()->addDays(10),
+        'status' => 'open',
+    ]);
+    $internship->update(['responsibilities' => 'Existing saved responsibilities.']);
+
+    $migration = require database_path('migrations/2026_11_11_192918_add_internship_public_detail_fields.php');
+    $migration->up();
+
+    expect($internship->fresh()->responsibilities)->toBe('Existing saved responsibilities.')
+        ->and($internship->fresh()->description)->toBe('Keep this current internship record unchanged.')
+        ->and(Internship::query()->count())->toBe(1);
 });

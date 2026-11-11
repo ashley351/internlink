@@ -240,6 +240,10 @@ test('the sign-in page offers a choice for each account type', function () {
         ->assertSee('Organisation staff')
         ->assertSee('Student')
         ->assertSee('Administrator')
+        ->assertSee('value="student" selected', false)
+        ->assertDontSee('Choose account type')
+        ->assertSee('Create account')
+        ->assertDontSee('Create a student account')
         ->assertDontSee('data-demo-login');
 });
 

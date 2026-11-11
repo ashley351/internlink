@@ -55,7 +55,7 @@
                 <div class="field"><label for="campus">Campus</label><input class="input" id="campus" name="campus" value="{{ old('campus', $profile?->campus) }}" required></div>
                 <div class="field"><label for="faculty">Faculty or school</label><input class="input" id="faculty" name="faculty" value="{{ old('faculty', $profile?->faculty) }}" required></div>
                 <div class="field"><label for="course">Course or academic programme</label><input class="input" id="course" name="course" value="{{ old('course', $user->course) }}" required></div>
-                <div class="field"><label for="year_of_study">Year of study</label><select class="input" id="year_of_study" name="year_of_study" required><option value="">Choose your year</option>@foreach(range(1, 12) as $year)<option value="{{ $year }}" @selected((string) old('year_of_study', $profile?->year_of_study) === (string) $year)>Year {{ $year }}</option>@endforeach</select></div>
+                <div class="field"><label for="year_of_study">Year of study</label><select class="input" id="year_of_study" name="year_of_study" required><option value="">Choose your year</option>@foreach(range(1, 4) as $year)<option value="{{ $year }}" @selected((string) old('year_of_study', $profile?->year_of_study) === (string) $year)>Year {{ $year }}</option>@endforeach</select></div>
                 <div class="field"><label for="student_registration_number">Student registration number</label><input class="input" id="student_registration_number" name="student_registration_number" value="{{ old('student_registration_number', $profile?->student_registration_number) }}" required></div>
             </div>
         </section>

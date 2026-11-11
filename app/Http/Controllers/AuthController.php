@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Institution;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -65,7 +65,7 @@ class AuthController extends Controller
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'course' => ['required_if:role,student', 'nullable', 'string', 'max:120'],
+            'course' => ['nullable', 'string', 'max:120'],
             'university' => [
                 'required_if:role,student,supervisor',
                 'nullable',
@@ -73,18 +73,17 @@ class AuthController extends Controller
                 Rule::exists('institutions', 'name')->where('is_active', true),
             ],
             'phone' => ['required_if:role,student', 'nullable', 'string', 'max:30'],
-            'campus' => ['required_if:role,student', 'nullable', 'string', 'max:120'],
-            'faculty' => ['required_if:role,student', 'nullable', 'string', 'max:160'],
-            'year_of_study' => ['required_if:role,student', 'nullable', 'integer', 'min:1', 'max:12'],
+            'campus' => ['nullable', 'string', 'max:120'],
+            'faculty' => ['nullable', 'string', 'max:160'],
+            'year_of_study' => ['nullable', 'integer', 'min:1', 'max:12'],
             'student_registration_number' => [
-                'required_if:role,student',
                 'nullable',
                 'string',
                 'max:100',
                 Rule::unique('student_profiles', 'student_registration_number'),
             ],
-            'academic_interests' => ['required_if:role,student', 'nullable', 'string', 'max:2000'],
-            'application_letter' => ['required_if:role,student', 'nullable', 'file', 'mimes:pdf,doc,docx,odt', 'max:5120'],
+            'academic_interests' => ['nullable', 'string', 'max:2000'],
+            'application_letter' => ['nullable', 'file', 'mimes:pdf,doc,docx,odt', 'max:5120'],
             'admin_invitation_code' => [
                 'required_if:role,admin',
                 'nullable',
@@ -98,7 +97,7 @@ class AuthController extends Controller
 
         $applicationLetterPath = null;
 
-        if ($role === User::ROLE_STUDENT) {
+        if ($role === User::ROLE_STUDENT && $request->hasFile('application_letter')) {
             $applicationLetterPath = $request->file('application_letter')->store('student-application-letters', 'local');
         }
 
@@ -116,13 +115,13 @@ class AuthController extends Controller
 
                 if ($role === User::ROLE_STUDENT) {
                     $user->studentProfile()->create([
-                        'phone' => $validated['phone'],
+                        'phone' => $validated['phone'] ?? null,
                         'institution_id' => Institution::query()->where('name', $validated['university'])->value('id'),
-                        'campus' => $validated['campus'],
-                        'faculty' => $validated['faculty'],
-                        'year_of_study' => $validated['year_of_study'],
-                        'student_registration_number' => $validated['student_registration_number'],
-                        'academic_interests' => $validated['academic_interests'],
+                        'campus' => $validated['campus'] ?? null,
+                        'faculty' => $validated['faculty'] ?? null,
+                        'year_of_study' => $validated['year_of_study'] ?? null,
+                        'student_registration_number' => $validated['student_registration_number'] ?? null,
+                        'academic_interests' => $validated['academic_interests'] ?? null,
                         'application_letter_path' => $applicationLetterPath,
                     ]);
                 }

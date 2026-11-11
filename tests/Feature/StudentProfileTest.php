@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
-test('a student can register with their profile and a private application letter', function () {
+test('a student can register with personal details and institution only', function () {
     Storage::fake('local');
 
     $this->post(route('register.store'), [
@@ -23,13 +23,6 @@ test('a student can register with their profile and a private application letter
         'password' => 'secure-pass-123',
         'password_confirmation' => 'secure-pass-123',
         'university' => 'Makerere University',
-        'campus' => 'Main Campus',
-        'faculty' => 'Computing and Informatics',
-        'course' => 'Computer Science',
-        'year_of_study' => '3',
-        'student_registration_number' => '24/U/1234',
-        'academic_interests' => 'Software engineering and accessible technology.',
-        'application_letter' => UploadedFile::fake()->create('application-letter.pdf', 100, 'application/pdf'),
     ])->assertRedirect(route('dashboard.student'));
 
     $this->assertAuthenticated();
@@ -40,35 +33,49 @@ test('a student can register with their profile and a private application letter
 
     $profile = $user->studentProfile()->firstOrFail();
     expect($profile->phone)->toBe('+256700000000')
-        ->and($profile->year_of_study)->toBe(3)
+        ->and($profile->year_of_study)->toBeNull()
         ->and($profile->institution?->name)->toBe('Makerere University');
-    Storage::disk('local')->assertExists($profile->application_letter_path);
+    expect($profile->application_letter_path)->toBeNull();
 
     $this->get(route('student.profile'))->assertOk()
         ->assertSee('Profile completion')
         ->assertSee('Aisha Namuli')
-        ->assertSee('Download your current letter');
+        ->assertSee('Year 4')
+        ->assertDontSee('Year 5')
+        ->assertSee('Application letter');
 });
 
-test('student registration requires the academic details and application letter', function () {
+test('student registration form ends with institution selection and omits the removed sections', function () {
+    $html = $this->get(route('register'))->assertOk()
+        ->assertSee('University or institution')
+        ->assertDontSee('Academic information')
+        ->assertDontSee('id="campus"', false)
+        ->assertDontSee('id="faculty"', false)
+        ->assertDontSee('id="course"', false)
+        ->assertDontSee('id="year_of_study"', false)
+        ->assertDontSee('id="student_registration_number"', false)
+        ->assertDontSee('Faculty or school')
+        ->assertDontSee('Academic interests')
+        ->assertDontSee('Application information')
+        ->assertDontSee('Application letter');
+
+    $html->assertSeeInOrder(['University or institution', 'Create account']);
+});
+
+test('student registration still requires a university or institution', function () {
+    Storage::fake('local');
+
     $this->from(route('register'))->post(route('register.store'), [
         'role' => User::ROLE_STUDENT,
         'name' => 'Aisha Namuli',
-        'email' => 'missing-letter@example.test',
+        'email' => 'missing-university@example.test',
         'phone' => '+256700000000',
         'password' => 'secure-pass-123',
         'password_confirmation' => 'secure-pass-123',
-        'university' => 'Makerere University',
-        'campus' => 'Main Campus',
-        'faculty' => 'Computing and Informatics',
-        'course' => 'Computer Science',
-        'year_of_study' => '3',
-        'student_registration_number' => '24/U/1235',
-        'academic_interests' => 'Software engineering and accessible technology.',
     ])->assertRedirect(route('register'))
-        ->assertSessionHasErrors('application_letter');
+        ->assertSessionHasErrors('university');
 
-    $this->assertDatabaseMissing('users', ['email' => 'missing-letter@example.test']);
+    $this->assertDatabaseMissing('users', ['email' => 'missing-university@example.test']);
 });
 
 test('a student can update their profile and replace their application letter', function () {

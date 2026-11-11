@@ -12,6 +12,7 @@ class Internship extends Model
     protected $fillable = [
         'organisation_id', 'title', 'field', 'description', 'location',
         'eligible_courses', 'slots_total', 'duration_weeks', 'closes_at', 'status',
+        'responsibilities', 'required_qualifications', 'payment_information', 'application_requirements',
     ];
 
     protected function casts(): array
