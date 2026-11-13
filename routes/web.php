@@ -3,8 +3,8 @@
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\InternshipController;
 use App\Http\Controllers\InstitutionController;
+use App\Http\Controllers\InternshipController;
 use App\Http\Controllers\OrganisationController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\SupervisorController;
@@ -92,6 +92,12 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/organisation/internships', [OrganisationController::class, 'storeInternship'])
         ->middleware('role:organisation')->name('organisation.internships.store');
+    Route::patch('/organisation/profile', [OrganisationController::class, 'updateProfile'])
+        ->middleware('role:organisation')->name('organisation.profile.update');
+    Route::patch('/organisation/internships/{internship}', [OrganisationController::class, 'updateInternship'])
+        ->middleware('role:organisation')->name('organisation.internships.update');
+    Route::patch('/organisation/internships/{internship}/status', [OrganisationController::class, 'updateInternshipStatus'])
+        ->middleware('role:organisation')->name('organisation.internships.status');
     Route::patch('/organisation/applications/{application}', [OrganisationController::class, 'updateApplication'])
         ->middleware('role:organisation')->name('organisation.applications.update');
 
@@ -99,6 +105,8 @@ Route::middleware('auth')->group(function () {
         ->middleware('role:admin')->name('admin.users.role');
     Route::patch('/admin/users/{user}/approve', [AdminController::class, 'approveAccount'])
         ->middleware('role:admin')->name('admin.users.approve');
+    Route::patch('/admin/users/{user}/reject', [AdminController::class, 'rejectAccount'])
+        ->middleware('role:admin')->name('admin.users.reject');
     Route::post('/admin/supervisor-assignments', [AdminController::class, 'assignSupervisor'])
         ->middleware('role:admin')->name('admin.supervisors.assign');
     Route::patch('/admin/internships/{internship}', [AdminController::class, 'moderateInternship'])

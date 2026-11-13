@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -43,6 +44,12 @@ class User extends Authenticatable
         'is_approved',
         'course',
         'university',
+        'approval_status',
+        'approval_decided_by',
+        'approval_decided_at',
+        'organisation_phone',
+        'organisation_website',
+        'organisation_description',
     ];
 
     public function hasRole(string $role): bool
@@ -54,6 +61,11 @@ class User extends Authenticatable
     public function hasAnyRole(array $roles): bool
     {
         return in_array($this->role, $roles, true);
+    }
+
+    public function approvalDecider(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'approval_decided_by');
     }
 
     public function internships(): HasMany
@@ -112,6 +124,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_approved' => 'boolean',
+            'approval_decided_at' => 'datetime',
         ];
     }
 }

@@ -3,6 +3,7 @@
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
@@ -41,38 +42,42 @@ test('a student can register and receives only the student role', function () {
         ->and(auth()->user()->is_approved)->toBeTrue();
 });
 
-test('administrator registration requires the configured invitation code', function () {
-    $registration = [
-        'name' => 'Admin User',
-        'email' => 'admin-signup@example.test',
+test('administrator account is created only by the protected one-time command', function () {
+    $password = 'Very-Strong-Admin-Password-123';
+
+    $this->artisan('app:create-administrator')
+        ->expectsQuestion('Administrator name', 'First Administrator')
+        ->expectsQuestion('Administrator email', 'first-admin@example.test')
+        ->expectsQuestion('Administrator password', $password)
+        ->expectsQuestion('Confirm administrator password', $password)
+        ->assertExitCode(0);
+
+    $administrator = User::where('email', 'first-admin@example.test')->firstOrFail();
+    expect($administrator->role)->toBe(User::ROLE_ADMIN)
+        ->and($administrator->is_approved)->toBeTrue()
+        ->and(Hash::check($password, $administrator->password))->toBeTrue();
+
+    $this->post(route('login.store'), [
+        'role' => User::ROLE_ADMIN,
+        'email' => $administrator->email,
+        'password' => $password,
+    ])->assertRedirect(route('dashboard.admin'));
+    $this->assertAuthenticatedAs($administrator);
+    auth()->logout();
+
+    $this->artisan('app:create-administrator')->assertExitCode(1);
+
+    $this->from(route('register'))->post(route('register.store'), [
+        'name' => 'Public Administrator',
+        'email' => 'public-admin@example.test',
         'role' => User::ROLE_ADMIN,
         'password' => 'secure-pass-123',
         'password_confirmation' => 'secure-pass-123',
-    ];
-
-    config(['internlink.admin_invitation_code' => null]);
-    $this->from(route('register'))->post(route('register.store'), [
-        ...$registration,
-        'admin_invitation_code' => 'unconfigured-code',
     ])->assertRedirect(route('register'))
-        ->assertSessionHasErrors('admin_invitation_code');
-    $this->assertGuest();
+        ->assertSessionHasErrors('role');
 
-    config(['internlink.admin_invitation_code' => 'private-admin-invite']);
-    $this->from(route('register'))->post(route('register.store'), $registration)
-        ->assertRedirect(route('register'))
-        ->assertSessionHasErrors('admin_invitation_code');
-    $this->assertGuest();
-    $this->assertDatabaseMissing('users', ['email' => $registration['email']]);
-
-    $this->post(route('register.store'), [
-        ...$registration,
-        'admin_invitation_code' => 'private-admin-invite',
-    ])->assertRedirect(route('dashboard'));
-
-    $this->assertAuthenticated();
-    expect(auth()->user()->role)->toBe(User::ROLE_ADMIN)
-        ->and(auth()->user()->is_approved)->toBeTrue();
+    $this->assertDatabaseMissing('users', ['email' => 'public-admin@example.test']);
+    $this->get(route('register'))->assertOk()->assertDontSee('value="admin"', false);
 });
 
 test('lecturer and organisation accounts require approval before sign in', function () {
@@ -99,7 +104,13 @@ test('lecturer and organisation accounts require approval before sign in', funct
             ->assertSessionHas('status');
 
         $user = User::where('email', $account['email'])->firstOrFail();
-        expect($user->is_approved)->toBeFalse();
+        expect($user->is_approved)->toBeFalse()
+            ->and($user->approval_status)->toBe('pending');
+        $protectedRoute = $account['role'] === User::ROLE_ORGANISATION
+            ? route('dashboard.organisation')
+            : route('dashboard.university');
+        $this->actingAs($user)->get($protectedRoute)->assertForbidden();
+        auth()->logout();
 
         $this->from(route('login'))->post(route('login.store'), [
             'role' => $account['role'],
@@ -113,21 +124,57 @@ test('lecturer and organisation accounts require approval before sign in', funct
         $this->actingAs($admin)->get(route('dashboard.admin'))
             ->assertOk()
             ->assertSee($account['email'])
-            ->assertSee('Pending approval')
-            ->assertSee('Approve account');
+            ->assertSee('Pending')
+            ->assertSee('Approve');
         $this->actingAs($admin)->patch(route('admin.users.approve', $user))
             ->assertRedirect();
-        expect($user->fresh()->is_approved)->toBeTrue();
+        expect($user->fresh()->is_approved)->toBeTrue()
+            ->and($user->fresh()->approval_status)->toBe('approved')
+            ->and($user->fresh()->approval_decided_by)->toBe($admin->id)
+            ->and($user->fresh()->approval_decided_at)->not->toBeNull();
 
         auth()->logout();
         $this->post(route('login.store'), [
             'role' => $account['role'],
             'email' => $account['email'],
             'password' => 'secure-pass-123',
-        ])->assertRedirect(route('dashboard'));
+        ])->assertRedirect($protectedRoute);
         $this->assertAuthenticatedAs($user);
         auth()->logout();
     }
+});
+
+test('administrator can reject a registration and the rejected user cannot sign in', function () {
+    $administrator = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $organisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'is_approved' => false,
+        'approval_status' => 'pending',
+        'password' => 'secure-pass-123',
+    ]);
+
+    $this->actingAs($administrator)
+        ->patch(route('admin.users.reject', $organisation))
+        ->assertRedirect();
+
+    expect($organisation->fresh()->is_approved)->toBeFalse()
+        ->and($organisation->fresh()->approval_status)->toBe('rejected')
+        ->and($organisation->fresh()->approval_decided_by)->toBe($administrator->id)
+        ->and($organisation->fresh()->approval_decided_at)->not->toBeNull();
+
+    auth()->logout();
+    $this->from(route('login'))->post(route('login.store'), [
+        'role' => User::ROLE_ORGANISATION,
+        'email' => $organisation->email,
+        'password' => 'secure-pass-123',
+    ])->assertRedirect(route('login'))
+        ->assertSessionHasErrors('email');
+    $this->assertGuest();
+
+    $this->actingAs($administrator)->get(route('dashboard.admin'))
+        ->assertOk()
+        ->assertSee($organisation->email)
+        ->assertSee('Rejected');
 });
 
 test('student registration only accepts a Kampala university', function () {
@@ -157,7 +204,7 @@ test('student registration only accepts a Kampala university', function () {
         ->assertOk()
         ->assertSee('University lecturer')
         ->assertSee('Organisation')
-        ->assertSee('Administrator')
+        ->assertDontSee('value="admin"', false)
         ->assertSee('University or institution')
         ->assertSee('Kampala International University');
 });
@@ -176,6 +223,19 @@ test('role dashboards reject users with a different role', function () {
     $this->actingAs($supervisor)->get(route('dashboard.supervision'))->assertForbidden();
     $this->actingAs($supervisor)->get(route('dashboard.student'))->assertForbidden();
     $this->actingAs($organisation)->get(route('dashboard.organisation'))->assertOk();
+    $pendingOrganisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'is_approved' => false,
+        'approval_status' => 'pending',
+    ]);
+    $rejectedSupervisor = User::factory()->create([
+        'role' => User::ROLE_SUPERVISOR,
+        'is_approved' => false,
+        'approval_status' => 'rejected',
+    ]);
+    $this->actingAs($pendingOrganisation)->get(route('dashboard.organisation'))->assertForbidden();
+    $this->actingAs($pendingOrganisation)->post(route('organisation.internships.store'), [])->assertForbidden();
+    $this->actingAs($rejectedSupervisor)->get(route('dashboard.university'))->assertForbidden();
     $this->actingAs($organisation)->get(route('dashboard.admin'))->assertForbidden();
     $this->actingAs($admin)->get(route('dashboard.admin'))->assertOk();
     $this->actingAs($admin)->get(route('dashboard.student'))->assertForbidden();
@@ -192,15 +252,15 @@ test('dashboard dispatches to the account role', function () {
     $this->actingAs($organisation)
         ->get(route('dashboard.organisation'))
         ->assertOk()
-        ->assertSee('Manage your Kampala placements');
+        ->assertSee('Your organisation workspace');
 });
 
 test('accounts for each role can sign in with their own passwords', function () {
     foreach ([
-        ['email' => 'student@internlink.test', 'role' => User::ROLE_STUDENT, 'password' => 'student-password'],
-        ['email' => 'supervisor@internlink.test', 'role' => User::ROLE_SUPERVISOR, 'password' => 'lecturer-password'],
-        ['email' => 'employer@internlink.test', 'role' => User::ROLE_ORGANISATION, 'password' => 'organisation-password'],
-        ['email' => 'admin@internlink.test', 'role' => User::ROLE_ADMIN, 'password' => 'admin-password'],
+        ['email' => 'student@internlink.test', 'role' => User::ROLE_STUDENT, 'password' => 'student-password', 'route' => 'dashboard.student'],
+        ['email' => 'supervisor@internlink.test', 'role' => User::ROLE_SUPERVISOR, 'password' => 'lecturer-password', 'route' => 'dashboard.university'],
+        ['email' => 'employer@internlink.test', 'role' => User::ROLE_ORGANISATION, 'password' => 'organisation-password', 'route' => 'dashboard.organisation'],
+        ['email' => 'admin@internlink.test', 'role' => User::ROLE_ADMIN, 'password' => 'admin-password', 'route' => 'dashboard.admin'],
     ] as $account) {
         $user = User::factory()->create([
             'email' => $account['email'],
@@ -212,7 +272,7 @@ test('accounts for each role can sign in with their own passwords', function () 
             'email' => $user->email,
             'password' => $account['password'],
             'role' => $account['role'],
-        ])->assertRedirect(route('dashboard'));
+        ])->assertRedirect(route($account['route']));
 
         $this->assertAuthenticatedAs($user);
         auth()->logout();
@@ -247,15 +307,9 @@ test('the sign-in page offers a choice for each account type', function () {
         ->assertDontSee('data-demo-login');
 });
 
-test('administrator signup can only be selected when an invitation code is configured', function () {
-    config(['internlink.admin_invitation_code' => null]);
+test('administrator signup is never offered on the public registration form', function () {
     $this->get(route('register'))
         ->assertOk()
-        ->assertSee('disabled>Administrator', false);
-
-    config(['internlink.admin_invitation_code' => 'private-admin-invite']);
-    $this->get(route('register'))
-        ->assertOk()
-        ->assertDontSee('disabled>Administrator', false)
-        ->assertSee('Administrator invitation code');
+        ->assertDontSee('value="admin"', false)
+        ->assertDontSee('Administrator invitation code');
 });

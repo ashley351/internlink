@@ -17,17 +17,29 @@ class DatabaseSeeder extends Seeder
 
         $supervisor = User::updateOrCreate(
             ['email' => 'supervisor@internlink.test'],
-            ['name' => 'Grace Nanyonga', 'password' => Hash::make('password'), 'role' => User::ROLE_SUPERVISOR, 'university' => 'Makerere University'],
+            [
+                'name' => 'Grace Nanyonga',
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_SUPERVISOR,
+                'university' => 'Makerere University',
+                'is_approved' => false,
+                'approval_status' => 'pending',
+                'approval_decided_by' => null,
+                'approval_decided_at' => null,
+            ],
         );
         $organisation = User::updateOrCreate(
             ['email' => 'employer@internlink.test'],
-            ['name' => 'BrightLabs Kampala', 'password' => Hash::make('password'), 'role' => User::ROLE_ORGANISATION],
+            [
+                'name' => 'BrightLabs Kampala',
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_ORGANISATION,
+                'is_approved' => false,
+                'approval_status' => 'pending',
+                'approval_decided_by' => null,
+                'approval_decided_at' => null,
+            ],
         );
-        User::updateOrCreate(
-            ['email' => 'admin@internlink.test'],
-            ['name' => 'InternLink Admin', 'password' => Hash::make('password'), 'role' => User::ROLE_ADMIN],
-        );
-
         $student = User::updateOrCreate(
             ['email' => 'student@internlink.test'],
             ['name' => 'Aisha Namuli', 'password' => Hash::make('password'), 'role' => User::ROLE_STUDENT, 'course' => 'Computer Science', 'university' => 'Makerere University'],

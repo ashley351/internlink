@@ -17,6 +17,9 @@
     .detail-copy{margin:0;color:var(--muted);line-height:1.8;white-space:pre-line;overflow-wrap:anywhere}
     .detail-contact{display:grid;gap:8px;margin-top:16px;padding:15px;border-radius:12px;background:#f6f9f8}
     .detail-contact a{color:var(--green);font-weight:700;overflow-wrap:anywhere}
+    .detail-application-letter{display:grid;gap:7px;margin:16px 0;padding:14px;border:1px solid var(--line);border-radius:12px;background:#f8faf9}
+    .detail-application-letter p{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+    .detail-application-letter a{color:var(--green);font-weight:700}
     .detail-aside{position:sticky;top:20px}
     .detail-aside h2{margin:0 0 10px;font-size:21px}
     .detail-aside>p{color:var(--muted);line-height:1.65}
@@ -58,6 +61,13 @@
             <section class="detail-section"><h2>Payment information</h2><p class="detail-copy">{{ filled($internship->payment_information) ? $internship->payment_information : 'Payment information has not been provided by the organisation.' }}</p></section>
             <section class="detail-section"><h2>Application requirements</h2><p class="detail-copy">{{ filled($internship->application_requirements) ? $internship->application_requirements : 'No additional application-document instructions have been provided.' }}</p></section>
             <section class="detail-section"><h2>Organisation</h2><p class="detail-copy">{{ $internship->organisation->name }}</p>
+                @if(filled($internship->organisation->organisation_description))<p class="detail-copy" style="margin-top:8px">{{ $internship->organisation->organisation_description }}</p>@endif
+                @if(filled($internship->organisation->organisation_website))
+                    <div class="detail-contact"><span class="muted">Organisation website</span><a href="{{ $internship->organisation->organisation_website }}" target="_blank" rel="noopener noreferrer">{{ $internship->organisation->organisation_website }}</a></div>
+                @endif
+                @if(filled($internship->organisation->organisation_phone))
+                    <div class="detail-contact"><span class="muted">Organisation telephone</span><a href="tel:{{ $internship->organisation->organisation_phone }}">{{ $internship->organisation->organisation_phone }}</a></div>
+                @endif
                 @if(filled($internship->organisation->email))
                     <div class="detail-contact"><span class="muted">Organisation contact</span><a href="mailto:{{ $internship->organisation->email }}">{{ $internship->organisation->email }}</a></div>
                 @endif
@@ -82,9 +92,19 @@
                 @elseif($internship->slots_total - $internship->filled_slots < 1)
                     <p class="notice">This internship has filled all its positions.</p>
                 @else
+                    <div class="detail-application-letter">
+                        <strong>Application letter for {{ $internship->organisation->name }}</strong>
+                        @if(filled(auth()->user()->studentProfile?->application_letter_path))
+                            <p>Your saved letter is stored privately. Review the organisation’s requirements and tailor it to this opportunity.</p>
+                            <a href="{{ route('student.profile.application-letter') }}">Download your application letter</a>
+                        @else
+                            <p>Manage your application letter in your student profile, then review the organisation’s requirements for this opportunity.</p>
+                            <a href="{{ route('student.profile') }}">Manage application letter</a>
+                        @endif
+                    </div>
                     <form method="POST" action="{{ route('internships.apply', $internship) }}">
                         @csrf
-                        <div class="field"><label for="cover_letter">Introductory letter</label><textarea class="input" id="cover_letter" name="cover_letter" rows="8" minlength="40" maxlength="5000" required>{{ old('cover_letter') }}</textarea><small class="muted">Tell this organisation why you are interested in this specific placement.</small>@error('cover_letter')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
+                        <div class="field"><label for="cover_letter">Introductory letter to {{ $internship->organisation->name }}</label><textarea class="input" id="cover_letter" name="cover_letter" rows="8" minlength="40" maxlength="5000" required>{{ old('cover_letter') }}</textarea><small class="muted">Explain why you are interested in this specific placement.</small>@error('cover_letter')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
                         <button class="button" type="submit">Submit application</button>
                     </form>
                 @endif

@@ -2,7 +2,7 @@
 
 return [
     'city' => 'Kampala',
-    'admin_invitation_code' => env('INTERNLINK_ADMIN_INVITATION_CODE'),
+    'coordinator_email' => env('INTERNLINK_COORDINATOR_EMAIL'),
 
     'universities' => [
         'Makerere University',

@@ -17,7 +17,14 @@ class EnsureUserHasRole
     {
         $user = $request->user();
 
-        abort_unless($user && $user->hasAnyRole($roles), 403);
+        abort_unless(
+            $user
+                && $user->hasAnyRole($roles)
+                && (! in_array($user->role, ['supervisor', 'organisation'], true)
+                    || ($user->is_approved && $user->approval_status === 'approved'))
+                && ($user->role !== 'admin' || $user->is_approved),
+            403,
+        );
 
         return $next($request);
     }

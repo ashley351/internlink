@@ -22,7 +22,7 @@
     <div class="auth card registration-card">
         <span class="eyebrow">Join InternLink</span>
         <h1>Get started</h1>
-        <p class="muted registration-intro">Choose how you’re joining. Student registration creates your placement profile. Employer accounts are listed as Organisations and may require administrator approval.</p>
+        <p class="muted registration-intro">Choose how you’re joining. Student registration creates your placement profile. Organisation and lecturer registrations require administrator approval before access is enabled.</p>
         @if($errors->any())
             <div class="notice" style="margin-top:16px">Please check the information below and try again.</div>
         @endif
@@ -34,7 +34,6 @@
                     <option value="{{ \App\Models\User::ROLE_STUDENT }}" @selected($selectedRole === \App\Models\User::ROLE_STUDENT)>Student</option>
                     <option value="{{ \App\Models\User::ROLE_SUPERVISOR }}" @selected($selectedRole === \App\Models\User::ROLE_SUPERVISOR)>University lecturer</option>
                     <option value="{{ \App\Models\User::ROLE_ORGANISATION }}" @selected($selectedRole === \App\Models\User::ROLE_ORGANISATION)>Employer / Organisation</option>
-                    <option value="{{ \App\Models\User::ROLE_ADMIN }}" @selected($selectedRole === \App\Models\User::ROLE_ADMIN) @disabled(! $adminSignupEnabled)>Administrator{{ $adminSignupEnabled ? '' : ' (invitation code not configured)' }}</option>
                 </select>
                 @error('role')<small class="registration-error">{{ $message }}</small>@enderror
             </div>
@@ -83,14 +82,24 @@
                 </div>
             </section>
 
-            <div data-role-fields="admin" @if($selectedRole !== \App\Models\User::ROLE_ADMIN) hidden @endif>
-                <div class="field">
-                    <label for="admin_invitation_code">Administrator invitation code</label>
-                    <input class="input" id="admin_invitation_code" name="admin_invitation_code" type="password" autocomplete="off">
-                    @error('admin_invitation_code')<small class="registration-error">{{ $message }}</small>@enderror
-                    @if(! $adminSignupEnabled)<small class="muted">Administrator signup is unavailable until an invitation code is configured.</small>@endif
+            <section class="registration-section" data-role-fields="organisation" @if($selectedRole !== \App\Models\User::ROLE_ORGANISATION) hidden @endif>
+                <h2>Organisation profile</h2>
+                <p>These details help students and administrators identify your organisation.</p>
+                <div class="registration-fields">
+                    <div class="field">
+                        <label for="organisation_phone">Contact telephone <span class="muted">(optional)</span></label>
+                        <input class="input" id="organisation_phone" name="organisation_phone" type="tel" value="{{ old('organisation_phone') }}" maxlength="30">
+                    </div>
+                    <div class="field">
+                        <label for="organisation_website">Website <span class="muted">(optional)</span></label>
+                        <input class="input" id="organisation_website" name="organisation_website" type="url" value="{{ old('organisation_website') }}" maxlength="255" placeholder="https://">
+                    </div>
+                    <div class="field full-width">
+                        <label for="organisation_description">About the organisation <span class="muted">(optional)</span></label>
+                        <textarea class="input" id="organisation_description" name="organisation_description" rows="3" maxlength="5000">{{ old('organisation_description') }}</textarea>
+                    </div>
                 </div>
-            </div>
+            </section>
             <button class="button" style="width:100%;margin-top:20px">Create account</button>
         </form>
         <p class="muted" style="text-align:center;margin:20px 0 0">Already registered? <a style="color:var(--green);font-weight:700" href="{{ route('login') }}">Sign in</a></p>
@@ -108,7 +117,7 @@
             section.hidden = !isVisible;
             section.querySelectorAll('input, select, textarea').forEach((field) => {
                 field.disabled = !isVisible;
-                field.required = isVisible && ['university', 'phone', 'admin_invitation_code'].includes(field.id);
+                field.required = isVisible && ['university', 'phone'].includes(field.id);
             });
         });
         nameLabel.textContent = roleSelect.value === '{{ \App\Models\User::ROLE_ORGANISATION }}' ? 'Organisation name' : 'Full name';

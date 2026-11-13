@@ -33,23 +33,36 @@ class AuthController extends Controller
                 ->onlyInput('email', 'role');
         }
 
-        if (! $request->user()->is_approved) {
+        if (in_array($request->user()->role, [User::ROLE_SUPERVISOR, User::ROLE_ORGANISATION], true)
+            && (! $request->user()->is_approved || $request->user()->approval_status !== 'approved')) {
+            $message = $request->user()->approval_status === 'rejected'
+                ? 'Your account registration was not approved. Contact InternLink support if you need assistance.'
+                : 'Your account is awaiting administrator approval.';
             Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
 
-            return back()->withErrors(['email' => 'Your account is awaiting administrator approval.'])
+            return back()->withErrors(['email' => $message])
                 ->onlyInput('email', 'role');
         }
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard'));
+        $destination = match ($request->user()->role) {
+            User::ROLE_STUDENT => 'dashboard.student',
+            User::ROLE_SUPERVISOR => 'dashboard.university',
+            User::ROLE_ORGANISATION => 'dashboard.organisation',
+            User::ROLE_ADMIN => 'dashboard.admin',
+            default => abort(403),
+        };
+
+        return redirect()->route($destination);
     }
 
     public function showRegister(): View
     {
         return view('auth.register', [
             'institutions' => Institution::query()->where('is_active', true)->orderBy('name')->get(),
-            'adminSignupEnabled' => filled(config('internlink.admin_invitation_code')),
         ]);
     }
 
@@ -60,7 +73,6 @@ class AuthController extends Controller
                 User::ROLE_STUDENT,
                 User::ROLE_SUPERVISOR,
                 User::ROLE_ORGANISATION,
-                User::ROLE_ADMIN,
             ])],
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
@@ -84,12 +96,9 @@ class AuthController extends Controller
             ],
             'academic_interests' => ['nullable', 'string', 'max:2000'],
             'application_letter' => ['nullable', 'file', 'mimes:pdf,doc,docx,odt', 'max:5120'],
-            'admin_invitation_code' => [
-                'required_if:role,admin',
-                'nullable',
-                'string',
-                Rule::in([config('internlink.admin_invitation_code')]),
-            ],
+            'organisation_phone' => ['nullable', 'string', 'max:30'],
+            'organisation_website' => ['nullable', 'url', 'max:255'],
+            'organisation_description' => ['nullable', 'string', 'max:5000'],
         ]);
 
         $role = $validated['role'];
@@ -109,8 +118,12 @@ class AuthController extends Controller
                     'password' => $validated['password'],
                     'role' => $role,
                     'is_approved' => ! $requiresApproval,
+                    'approval_status' => $requiresApproval ? 'pending' : 'approved',
                     'course' => $validated['course'] ?? null,
                     'university' => $validated['university'] ?? null,
+                    'organisation_phone' => $validated['organisation_phone'] ?? null,
+                    'organisation_website' => $validated['organisation_website'] ?? null,
+                    'organisation_description' => $validated['organisation_description'] ?? null,
                 ]);
 
                 if ($role === User::ROLE_STUDENT) {
@@ -143,7 +156,7 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route($role === User::ROLE_STUDENT ? 'dashboard.student' : 'dashboard');
+        return redirect()->route('dashboard.student');
     }
 
     public function logout(Request $request): RedirectResponse

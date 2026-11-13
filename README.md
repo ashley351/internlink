@@ -69,16 +69,16 @@ The home page and role dashboards are now tailored to an internship placement pl
 - **Organisation representative** — manages its internship capacity and applicants and views recruitment statistics.
 - **Administrator** — oversees accounts, partner verification, listings and platform-wide activity.
 
-Only students can self-register. Supervisor, organisation and administrator accounts should be created or assigned by a trusted administrator; never expose role selection in public registration. The `role` middleware protects role-specific dashboard routes, and the general dashboard dispatches by the authenticated account role.
+Students, lecturers and organisations can register through the public form. Lecturer and organisation accounts remain pending until an administrator reviews them; server-side middleware prevents pending or rejected accounts from using protected pages. Administrator accounts cannot be registered publicly. Create the first administrator from a trusted deployment or local terminal with `php artisan app:create-administrator`; the command prompts for a name, email and password, requires a 12-character minimum password, and can run only while no administrator exists.
 
 The initial rollout is Kampala-only. Student registration accepts only the university names configured in `config/internlink.php`, and the landing page and sample internship dashboards are scoped to Kampala.
 
 ### Local demo setup
 
-Run `php artisan migrate --seed` to create the workflow tables and sample Kampala data. The local demo accounts all use `password`: `student@internlink.test`, `supervisor@internlink.test`, `employer@internlink.test`, and `admin@internlink.test`. These are development-only credentials; change or remove them before deployment.
+Run `php artisan migrate --seed` to create the workflow tables and sample Kampala data for local development only. The seeded student, lecturer and organisation accounts use development-only credentials documented in the seeder; do not run the demo seeder in production. Seeded lecturer and organisation accounts are Pending. No administrator is seeded. Create one with `php artisan app:create-administrator`, then approve the seeded accounts from the administrator workspace.
 
-The seeded demo allows you to test a complete path: an organisation creates a pending listing, an administrator publishes it, a student applies, the organisation advances the application, the administrator assigns a supervisor, and the student and supervisor exchange messages, request visits and submit/review weekly logbooks.
+To test approvals locally, create the initial administrator, register an organisation or lecturer, approve or reject the request in the administrator workspace, then sign in again using the original registration credentials. Approved organisations can edit their organisation profile and manage their own internship opportunities; lecturers land on the university support page and can continue supporting assigned students.
 
 ### Current implementation boundary
 
-Dashboard statistics, sample internships, applicant rows, messages and logbook entries are currently illustrative UI data. Persistence and ownership policies for internship listings, applications, assigned students, messages, visits and logbooks still need to be added before production use. Continue enforcing record-level ownership (not just role checks) when those features are connected to the database.
+The account approval and organisation profile fields are added by a forward-only data-preserving migration. Existing approved accounts retain access; existing unapproved lecturer and organisation accounts migrate to Pending and need administrator review. Set `INTERNLINK_COORDINATOR_EMAIL` in the deployment environment to show a configured university coordinator contact on the lecturer support page.

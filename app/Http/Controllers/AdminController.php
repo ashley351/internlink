@@ -20,6 +20,22 @@ class AdminController extends Controller
     {
         return view('workspaces.admin', [
             'users' => User::query()->orderBy('is_approved')->latest()->paginate(25, ['*'], 'users_page'),
+            'pendingOrganisations' => User::query()
+                ->where('role', User::ROLE_ORGANISATION)
+                ->where('approval_status', 'pending')
+                ->latest()
+                ->paginate(10, ['*'], 'pending_organisations_page'),
+            'pendingSupervisors' => User::query()
+                ->where('role', User::ROLE_SUPERVISOR)
+                ->where('approval_status', 'pending')
+                ->latest()
+                ->paginate(10, ['*'], 'pending_supervisors_page'),
+            'registrationHistory' => User::query()
+                ->whereIn('role', [User::ROLE_ORGANISATION, User::ROLE_SUPERVISOR])
+                ->whereIn('approval_status', ['approved', 'rejected'])
+                ->with('approvalDecider')
+                ->latest('approval_decided_at')
+                ->paginate(20, ['*'], 'registration_history_page'),
             'internships' => Internship::query()->with('organisation')->latest()->paginate(20, ['*'], 'listings_page'),
             'applications' => InternshipApplication::query()->with(['student', 'internship.organisation'])->latest()->paginate(25, ['*'], 'applications_page'),
             'assignments' => SupervisorAssignment::query()->with(['student', 'supervisor'])->latest()->paginate(25, ['*'], 'assignments_page'),
@@ -28,11 +44,18 @@ class AdminController extends Controller
             'messages' => PlacementMessage::query()->with(['student', 'supervisor', 'sender'])->latest()->paginate(25, ['*'], 'messages_page'),
             'audits' => ActivityAudit::with('actor')->latest()->take(20)->get(),
             'students' => User::where('role', User::ROLE_STUDENT)->orderBy('name')->get(),
-            'supervisors' => User::where('role', User::ROLE_SUPERVISOR)->orderBy('name')->get(),
+            'supervisors' => User::query()
+                ->where('role', User::ROLE_SUPERVISOR)
+                ->where('approval_status', 'approved')
+                ->where('is_approved', true)
+                ->orderBy('name')
+                ->get(),
             'counts' => [
                 'students' => User::where('role', User::ROLE_STUDENT)->count(),
                 'supervisors' => User::where('role', User::ROLE_SUPERVISOR)->count(),
                 'organisations' => User::where('role', User::ROLE_ORGANISATION)->count(),
+                'pending_organisations' => User::query()->where('role', User::ROLE_ORGANISATION)->where('approval_status', 'pending')->count(),
+                'pending_supervisors' => User::query()->where('role', User::ROLE_SUPERVISOR)->where('approval_status', 'pending')->count(),
                 'pending_listings' => Internship::where('status', 'pending')->count(),
             ],
         ]);
@@ -65,11 +88,21 @@ class AdminController extends Controller
 
     public function updateRole(Request $request, User $user): RedirectResponse
     {
-        $data = $request->validate(['role' => ['required', 'in:'.implode(',', User::ROLES)]]);
-        abort_if($user->is($request->user()), 422, 'You cannot change your own administrator role.');
+        $assignableRoles = array_values(array_diff(User::ROLES, [User::ROLE_ADMIN]));
+        $data = $request->validate(['role' => ['required', 'in:'.implode(',', $assignableRoles)]]);
+        abort_if($user->is($request->user()) || $user->role === User::ROLE_ADMIN, 422, 'Administrator roles are managed through the protected setup process.');
 
         $previousRole = $user->role;
-        $user->update(['role' => $data['role']]);
+        if ($data['role'] !== $previousRole) {
+            $isAwaitingApproval = in_array($data['role'], [User::ROLE_SUPERVISOR, User::ROLE_ORGANISATION], true);
+            $user->update([
+                'role' => $data['role'],
+                'is_approved' => ! $isAwaitingApproval,
+                'approval_status' => $isAwaitingApproval ? 'pending' : 'approved',
+                'approval_decided_by' => null,
+                'approval_decided_at' => null,
+            ]);
+        }
         ActivityAudit::create([
             'actor_id' => $request->user()->id,
             'action' => 'user_role_updated',
@@ -83,19 +116,34 @@ class AdminController extends Controller
 
     public function approveAccount(Request $request, User $user): RedirectResponse
     {
-        abort_unless(in_array($user->role, [User::ROLE_SUPERVISOR, User::ROLE_ORGANISATION], true), 404);
-        abort_if($user->is_approved, 422, 'This account has already been approved.');
+        return $this->decideAccount($request, $user, 'approved');
+    }
 
-        $user->update(['is_approved' => true]);
+    public function rejectAccount(Request $request, User $user): RedirectResponse
+    {
+        return $this->decideAccount($request, $user, 'rejected');
+    }
+
+    private function decideAccount(Request $request, User $user, string $status): RedirectResponse
+    {
+        abort_unless(in_array($user->role, [User::ROLE_SUPERVISOR, User::ROLE_ORGANISATION], true), 404);
+        abort_unless(in_array($status, ['approved', 'rejected'], true), 422);
+
+        $user->update([
+            'is_approved' => $status === 'approved',
+            'approval_status' => $status,
+            'approval_decided_by' => $request->user()->id,
+            'approval_decided_at' => now(),
+        ]);
         ActivityAudit::create([
             'actor_id' => $request->user()->id,
-            'action' => 'account_approved',
+            'action' => 'account_'.$status,
             'subject_type' => User::class,
             'subject_id' => $user->id,
-            'details' => ['role' => $user->role],
+            'details' => ['role' => $user->role, 'status' => $status],
         ]);
 
-        return back()->with('status', 'Account approved.');
+        return back()->with('status', 'Account registration '.$status.'.');
     }
 
     public function moderateInternship(Request $request, Internship $internship): RedirectResponse

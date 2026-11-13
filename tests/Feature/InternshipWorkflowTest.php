@@ -36,7 +36,7 @@ test('kampala placement moves through application, supervision and logbook revie
     ])->assertRedirect();
 
     $internship = Internship::firstOrFail();
-    expect($internship->status)->toBe('pending')
+    expect($internship->status)->toBe('open')
         ->and($internship->responsibilities)->toBe('Implement and test assigned software features.')
         ->and($internship->application_requirements)->toBe('Include an introductory letter addressed to the employer.');
 
@@ -112,7 +112,7 @@ test('kampala placement moves through application, supervision and logbook revie
     $this->actingAs($supervisor)->get(route('dashboard.university'))
         ->assertOk()->assertSee('Review submissions');
     $this->actingAs($organisation)->get(route('dashboard.organisation'))
-        ->assertOk()->assertSee('Applications per week');
+        ->assertOk()->assertSee('Your organisation workspace');
     $this->actingAs($admin)->get(route('dashboard.admin'))
         ->assertOk()
         ->assertSee('Listing review')
@@ -151,6 +151,78 @@ test('organisations cannot update applications for another organisation', functi
     $this->actingAs($outsider)->patch(route('organisation.applications.update', $application), [
         'status' => 'shortlisted',
     ])->assertForbidden();
+});
+
+test('approved organisations can manage only their profile and their own published opportunities', function () {
+    $organisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'name' => 'Northstar Digital',
+    ]);
+    $otherOrganisation = User::factory()->create(['role' => User::ROLE_ORGANISATION]);
+    $internship = Internship::create([
+        'organisation_id' => $organisation->id,
+        'title' => 'Data Intern',
+        'field' => 'Data Science',
+        'description' => 'Work with a data team on useful analysis projects.',
+        'location' => 'Kampala',
+        'slots_total' => 2,
+        'duration_weeks' => 10,
+        'closes_at' => today()->addDays(20),
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($organisation)->patch(route('organisation.profile.update'), [
+        'name' => 'Northstar Analytics',
+        'email' => $organisation->email,
+        'organisation_phone' => '+256700000000',
+        'organisation_website' => 'https://northstar.example.test',
+        'organisation_description' => 'A local data organisation.',
+    ])->assertRedirect();
+    expect($organisation->fresh()->name)->toBe('Northstar Analytics')
+        ->and($organisation->fresh()->organisation_phone)->toBe('+256700000000');
+
+    $this->actingAs($organisation)->post(route('organisation.internships.store'), [
+        'title' => 'Junior Data Analyst',
+        'field' => 'Data Science',
+        'description' => 'Support the team with reporting and data quality reviews.',
+        'slots_total' => 2,
+        'duration_weeks' => 8,
+        'closes_at' => today()->addDays(18)->format('Y-m-d'),
+    ])->assertRedirect();
+    $this->assertDatabaseHas('internships', [
+        'organisation_id' => $organisation->id,
+        'title' => 'Junior Data Analyst',
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($organisation)->patch(route('organisation.internships.update', $internship), [
+        'title' => 'Graduate Data Analyst Intern',
+        'field' => 'Data Science',
+        'description' => 'Work with the team to prepare, analyze and explain datasets.',
+        'slots_total' => 3,
+        'duration_weeks' => 12,
+        'closes_at' => today()->addDays(25)->format('Y-m-d'),
+    ])->assertRedirect();
+    expect($internship->fresh()->title)->toBe('Graduate Data Analyst Intern')
+        ->and($internship->fresh()->status)->toBe('open');
+
+    $this->actingAs($otherOrganisation)
+        ->patch(route('organisation.internships.update', $internship), [
+            'title' => 'Unauthorized change',
+        ])->assertNotFound();
+    $this->actingAs($otherOrganisation)
+        ->patch(route('organisation.internships.status', $internship), ['status' => 'closed'])
+        ->assertNotFound();
+
+    $this->actingAs($organisation)
+        ->patch(route('organisation.internships.status', $internship), ['status' => 'closed'])
+        ->assertRedirect();
+    expect($internship->fresh()->status)->toBe('closed');
+
+    $this->actingAs($organisation)
+        ->patch(route('organisation.internships.status', $internship), ['status' => 'open'])
+        ->assertRedirect();
+    expect($internship->fresh()->status)->toBe('open');
 });
 
 test('lecturers only see visits assigned to them for their current students', function () {
@@ -399,6 +471,41 @@ test('internship detail page displays employer-provided role information and con
         ->assertSee('Submit an introductory letter addressed to Northstar Digital.')
         ->assertSee('careers@northstar.example.test')
         ->assertSee('Data Intern');
+});
+
+test('students can access or manage their application letter for an organisation-specific opportunity', function () {
+    $organisation = User::factory()->create([
+        'role' => User::ROLE_ORGANISATION,
+        'name' => 'Northstar Digital',
+    ]);
+    $student = User::factory()->create(['role' => User::ROLE_STUDENT]);
+    $student->studentProfile()->create([
+        'application_letter_path' => 'student-application-letters/northstar.pdf',
+    ]);
+    $internship = Internship::create([
+        'organisation_id' => $organisation->id,
+        'title' => 'Data Intern',
+        'field' => 'Data Science',
+        'description' => 'Work with the team on analysis projects.',
+        'location' => 'Kampala',
+        'slots_total' => 2,
+        'duration_weeks' => 10,
+        'closes_at' => today()->addDays(20),
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($student)->get(route('internships.show', $internship))
+        ->assertOk()
+        ->assertSee('Application letter for Northstar Digital')
+        ->assertSee('Download your application letter')
+        ->assertSee(route('student.profile.application-letter'), false)
+        ->assertSee('Introductory letter to Northstar Digital');
+
+    $this->actingAs(User::factory()->create(['role' => User::ROLE_STUDENT]))
+        ->get(route('internships.show', $internship))
+        ->assertOk()
+        ->assertSee('Manage application letter')
+        ->assertSee(route('student.profile'), false);
 });
 
 test('internship detail migration safely adds missing fields without affecting listings', function () {

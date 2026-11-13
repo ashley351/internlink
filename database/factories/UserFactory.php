@@ -30,6 +30,8 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'role' => User::ROLE_STUDENT,
+            'is_approved' => true,
+            'approval_status' => 'approved',
             'course' => fake()->randomElement(['Computer Science', 'Business Administration', 'Engineering']),
             'university' => fake()->randomElement(config('internlink.universities')),
             'remember_token' => Str::random(10),
