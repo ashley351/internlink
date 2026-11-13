@@ -91,20 +91,28 @@
                     <p class="notice">You have already applied to this internship.</p>
                 @elseif($internship->slots_total - $internship->filled_slots < 1)
                     <p class="notice">This internship has filled all its positions.</p>
+                @elseif(! $applicationLetterAvailable)
+                    <p class="notice">Add your application letter to your student profile before applying.</p>
+                    <a class="button" href="{{ route('student.profile') }}">Manage student profile</a>
                 @else
                     <div class="detail-application-letter">
                         <strong>Application letter for {{ $internship->organisation->name }}</strong>
-                        @if(filled(auth()->user()->studentProfile?->application_letter_path))
-                            <p>Your saved letter is stored privately. Review the organisation’s requirements and tailor it to this opportunity.</p>
-                            <a href="{{ route('student.profile.application-letter') }}">Download your application letter</a>
-                        @else
-                            <p>Manage your application letter in your student profile, then review the organisation’s requirements for this opportunity.</p>
-                            <a href="{{ route('student.profile') }}">Manage application letter</a>
-                        @endif
+                        <p>Your saved letter will be included with this application. Review it before submitting.</p>
+                        <a href="{{ route('student.profile.application-letter') }}">Review your saved application letter</a>
+                        <a href="{{ route('student.profile') }}">Replace application letter</a>
                     </div>
                     <form method="POST" action="{{ route('internships.apply', $internship) }}">
                         @csrf
                         <div class="field"><label for="cover_letter">Introductory letter to {{ $internship->organisation->name }}</label><textarea class="input" id="cover_letter" name="cover_letter" rows="8" minlength="40" maxlength="5000" required>{{ old('cover_letter') }}</textarea><small class="muted">Explain why you are interested in this specific placement.</small>@error('cover_letter')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
+                        <h3>Academic information</h3>
+                        <p class="muted">Enter the academic details you want this organisation to review with your application.</p>
+                        <div class="field"><label for="university">University or institution</label><input class="input" id="university" name="university" value="{{ old('university') }}" maxlength="255" required>@error('university')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
+                        <div class="field"><label for="campus">Campus</label><input class="input" id="campus" name="campus" value="{{ old('campus') }}" maxlength="120" required>@error('campus')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
+                        <div class="field"><label for="faculty">Faculty</label><input class="input" id="faculty" name="faculty" value="{{ old('faculty') }}" maxlength="160" required>@error('faculty')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
+                        <div class="field"><label for="course">Course or programme</label><input class="input" id="course" name="course" value="{{ old('course') }}" maxlength="120" required>@error('course')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
+                        <div class="field"><label for="year_of_study">Year of study</label><select class="input" id="year_of_study" name="year_of_study" required><option value="">Choose your year</option>@foreach(range(1, 12) as $year)<option value="{{ $year }}" @selected((string) old('year_of_study') === (string) $year)>Year {{ $year }}</option>@endforeach</select>@error('year_of_study')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
+                        <div class="field"><label for="student_registration_number">Student registration number</label><input class="input" id="student_registration_number" name="student_registration_number" value="{{ old('student_registration_number') }}" maxlength="100" required>@error('student_registration_number')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
+                        <div class="field"><label for="academic_interests">Academic interests</label><textarea class="input" id="academic_interests" name="academic_interests" rows="4" maxlength="2000" required>{{ old('academic_interests') }}</textarea>@error('academic_interests')<small style="color:#b42318">{{ $message }}</small>@enderror</div>
                         <button class="button" type="submit">Submit application</button>
                     </form>
                 @endif

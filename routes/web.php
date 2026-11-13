@@ -92,6 +92,8 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/organisation/internships', [OrganisationController::class, 'storeInternship'])
         ->middleware('role:organisation')->name('organisation.internships.store');
+    Route::get('/organisation/applications/{application}/application-letter', [OrganisationController::class, 'downloadApplicationLetter'])
+        ->middleware('role:organisation')->name('organisation.applications.application-letter');
     Route::patch('/organisation/profile', [OrganisationController::class, 'updateProfile'])
         ->middleware('role:organisation')->name('organisation.profile.update');
     Route::patch('/organisation/internships/{internship}', [OrganisationController::class, 'updateInternship'])

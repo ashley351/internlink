@@ -9,7 +9,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use RuntimeException;
+use Throwable;
 
 class InternshipController extends Controller
 {
@@ -86,11 +89,16 @@ class InternshipController extends Controller
             404,
         );
 
+        $student = Auth::user();
+        $applicationLetterPath = $student?->studentProfile?->application_letter_path;
+
         return view('internships.show', [
             'internship' => $internship->load('organisation')->loadCount([
                 'applications as filled_slots' => fn ($query) => $query->whereIn('status', ['offered', 'placed']),
             ]),
-            'alreadyApplied' => Auth::check() && $internship->applications()->where('student_id', Auth::id())->exists(),
+            'alreadyApplied' => $student !== null && $internship->applications()->where('student_id', $student->id)->exists(),
+            'applicationLetterAvailable' => filled($applicationLetterPath)
+                && Storage::disk('local')->exists($applicationLetterPath),
         ]);
     }
 
@@ -100,27 +108,69 @@ class InternshipController extends Controller
 
         $validated = $request->validate([
             'cover_letter' => ['required', 'string', 'min:40', 'max:5000'],
+            'university' => ['required', 'string', 'max:255'],
+            'campus' => ['required', 'string', 'max:120'],
+            'faculty' => ['required', 'string', 'max:160'],
+            'course' => ['required', 'string', 'max:120'],
+            'year_of_study' => ['required', 'integer', 'min:1', 'max:12'],
+            'student_registration_number' => ['required', 'string', 'max:100'],
+            'academic_interests' => ['required', 'string', 'max:2000'],
         ]);
+
+        $profileLetterPath = $request->user()->studentProfile?->application_letter_path;
+        abort_unless(
+            filled($profileLetterPath) && Storage::disk('local')->exists($profileLetterPath),
+            422,
+            'Please upload an application letter in your student profile before applying.',
+        );
 
         abort_if($request->user()->internshipApplications()->whereNotIn('status', ['rejected', 'withdrawn'])->count() >= 6, 422, 'You have reached the six-application limit.');
 
-        $application = DB::transaction(function () use ($request, $internship, $validated) {
-            $lockedInternship = Internship::query()->lockForUpdate()->findOrFail($internship->id);
-            abort_unless($lockedInternship->status === 'open'
-                && $lockedInternship->location === config('internlink.city')
-                && $lockedInternship->closes_at->greaterThanOrEqualTo(today()), 422, 'This internship is no longer accepting applications.');
+        $applicationLetterPath = null;
 
-            abort_if($lockedInternship->applications()->where('student_id', $request->user()->id)->exists(), 422, 'You have already applied to this internship.');
+        try {
+            $application = DB::transaction(function () use ($request, $internship, $validated, $profileLetterPath, &$applicationLetterPath): InternshipApplication {
+                $lockedInternship = Internship::query()->lockForUpdate()->findOrFail($internship->id);
+                abort_unless($lockedInternship->status === 'open'
+                    && $lockedInternship->location === config('internlink.city')
+                    && $lockedInternship->closes_at->greaterThanOrEqualTo(today()), 422, 'This internship is no longer accepting applications.');
 
-            $placedCount = $lockedInternship->applications()->whereIn('status', ['offered', 'placed'])->count();
-            abort_if($placedCount >= $lockedInternship->slots_total, 422, 'This internship has filled all its slots.');
+                abort_if($lockedInternship->applications()->where('student_id', $request->user()->id)->exists(), 422, 'You have already applied to this internship.');
 
-            return InternshipApplication::create([
-                'internship_id' => $lockedInternship->id,
-                'student_id' => $request->user()->id,
-                'cover_letter' => $validated['cover_letter'],
-            ]);
-        });
+                $placedCount = $lockedInternship->applications()->whereIn('status', ['offered', 'placed'])->count();
+                abort_if($placedCount >= $lockedInternship->slots_total, 422, 'This internship has filled all its slots.');
+
+                $application = InternshipApplication::create([
+                    'internship_id' => $lockedInternship->id,
+                    'student_id' => $request->user()->id,
+                    'cover_letter' => $validated['cover_letter'],
+                    'university' => $validated['university'],
+                    'campus' => $validated['campus'],
+                    'faculty' => $validated['faculty'],
+                    'course' => $validated['course'],
+                    'year_of_study' => $validated['year_of_study'],
+                    'student_registration_number' => $validated['student_registration_number'],
+                    'academic_interests' => $validated['academic_interests'],
+                ]);
+
+                $extension = strtolower(pathinfo($profileLetterPath, PATHINFO_EXTENSION));
+                $applicationLetterPath = 'internship-application-letters/'.$application->id.'/application-letter'.($extension !== '' ? '.'.$extension : '');
+
+                if (! Storage::disk('local')->copy($profileLetterPath, $applicationLetterPath)) {
+                    throw new RuntimeException('The application letter could not be saved with the internship application.');
+                }
+
+                $application->update(['application_letter_path' => $applicationLetterPath]);
+
+                return $application;
+            });
+        } catch (Throwable $exception) {
+            if ($applicationLetterPath !== null) {
+                Storage::disk('local')->delete($applicationLetterPath);
+            }
+
+            throw $exception;
+        }
 
         return redirect()->route('dashboard')->with('status', 'Your application was submitted.');
     }

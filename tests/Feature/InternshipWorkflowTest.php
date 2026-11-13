@@ -8,15 +8,22 @@ use App\Models\VisitRequest;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
 test('kampala placement moves through application, supervision and logbook review', function () {
+    Storage::fake('local');
+
     $organisation = User::factory()->create(['role' => User::ROLE_ORGANISATION, 'name' => 'Kampala Tech Ltd']);
     $student = User::factory()->create([
         'role' => User::ROLE_STUDENT,
         'course' => 'Computer Science',
         'university' => 'Makerere University',
+    ]);
+    Storage::disk('local')->put('student-application-letters/letter.pdf', 'application letter');
+    $student->studentProfile()->create([
+        'application_letter_path' => 'student-application-letters/letter.pdf',
     ]);
     $supervisor = User::factory()->create(['role' => User::ROLE_SUPERVISOR]);
     $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
@@ -48,10 +55,37 @@ test('kampala placement moves through application, supervision and logbook revie
         ->assertOk()->assertSee('Software Engineering Intern');
     $this->actingAs($student)->post(route('internships.apply', $internship), [
         'cover_letter' => str_repeat('I am a motivated computer science student with relevant project experience. ', 2),
+        'university' => 'Makerere University',
+        'campus' => 'Main Campus',
+        'faculty' => 'Computing and Informatics',
+        'course' => 'Computer Science',
+        'year_of_study' => 3,
+        'student_registration_number' => '24/U/1234',
+        'academic_interests' => 'Software engineering and accessible technology.',
     ])->assertRedirect(route('dashboard'));
 
     $application = InternshipApplication::firstOrFail();
-    expect($application->status)->toBe('submitted');
+    expect($application->status)->toBe('submitted')
+        ->and($application->university)->toBe('Makerere University')
+        ->and($application->campus)->toBe('Main Campus')
+        ->and($application->faculty)->toBe('Computing and Informatics')
+        ->and($application->course)->toBe('Computer Science')
+        ->and($application->year_of_study)->toBe(3)
+        ->and($application->student_registration_number)->toBe('24/U/1234')
+        ->and(Storage::disk('local')->exists($application->application_letter_path))->toBeTrue();
+    Storage::disk('local')->delete('student-application-letters/letter.pdf');
+    expect(Storage::disk('local')->exists($application->application_letter_path))->toBeTrue();
+
+    $this->actingAs($organisation)
+        ->get(route('organisation.applications.application-letter', $application))
+        ->assertOk()
+        ->assertHeader('content-disposition', 'attachment; filename=application-letter.pdf');
+    $this->actingAs($organisation)->get(route('dashboard.organisation'))
+        ->assertOk()
+        ->assertSee('Makerere University')
+        ->assertSee('Computing and Informatics')
+        ->assertSee('24/U/1234')
+        ->assertSee('Software engineering and accessible technology.');
 
     $this->actingAs($organisation)->patch(route('organisation.applications.update', $application), [
         'status' => 'placed',
@@ -151,6 +185,9 @@ test('organisations cannot update applications for another organisation', functi
     $this->actingAs($outsider)->patch(route('organisation.applications.update', $application), [
         'status' => 'shortlisted',
     ])->assertForbidden();
+    $this->actingAs($outsider)
+        ->get(route('organisation.applications.application-letter', $application))
+        ->assertForbidden();
 });
 
 test('approved organisations can manage only their profile and their own published opportunities', function () {
@@ -474,11 +511,14 @@ test('internship detail page displays employer-provided role information and con
 });
 
 test('students can access or manage their application letter for an organisation-specific opportunity', function () {
+    Storage::fake('local');
+
     $organisation = User::factory()->create([
         'role' => User::ROLE_ORGANISATION,
         'name' => 'Northstar Digital',
     ]);
     $student = User::factory()->create(['role' => User::ROLE_STUDENT]);
+    Storage::disk('local')->put('student-application-letters/northstar.pdf', 'application letter');
     $student->studentProfile()->create([
         'application_letter_path' => 'student-application-letters/northstar.pdf',
     ]);
@@ -497,15 +537,58 @@ test('students can access or manage their application letter for an organisation
     $this->actingAs($student)->get(route('internships.show', $internship))
         ->assertOk()
         ->assertSee('Application letter for Northstar Digital')
-        ->assertSee('Download your application letter')
+        ->assertSee('Review your saved application letter')
         ->assertSee(route('student.profile.application-letter'), false)
-        ->assertSee('Introductory letter to Northstar Digital');
+        ->assertSee('Introductory letter to Northstar Digital')
+        ->assertSee('University or institution')
+        ->assertSee('Academic interests');
 
     $this->actingAs(User::factory()->create(['role' => User::ROLE_STUDENT]))
         ->get(route('internships.show', $internship))
         ->assertOk()
-        ->assertSee('Manage application letter')
-        ->assertSee(route('student.profile'), false);
+        ->assertSee('Manage student profile')
+        ->assertSee(route('student.profile'), false)
+        ->assertDontSee('name="cover_letter"', false);
+});
+
+test('internship applications require academic information on each submission', function () {
+    Storage::fake('local');
+
+    $organisation = User::factory()->create(['role' => User::ROLE_ORGANISATION]);
+    $student = User::factory()->create(['role' => User::ROLE_STUDENT]);
+    Storage::disk('local')->put('student-application-letters/letter.pdf', 'application letter');
+    $student->studentProfile()->create([
+        'application_letter_path' => 'student-application-letters/letter.pdf',
+    ]);
+    $internship = Internship::create([
+        'organisation_id' => $organisation->id,
+        'title' => 'Data Intern',
+        'field' => 'Data Science',
+        'description' => 'Work with the team on analysis projects.',
+        'location' => 'Kampala',
+        'slots_total' => 2,
+        'duration_weeks' => 10,
+        'closes_at' => today()->addDays(20),
+        'status' => 'open',
+    ]);
+
+    $this->actingAs($student)
+        ->from(route('internships.show', $internship))
+        ->post(route('internships.apply', $internship), [
+            'cover_letter' => str_repeat('I am interested in this placement and have relevant experience. ', 2),
+        ])
+        ->assertRedirect(route('internships.show', $internship))
+        ->assertSessionHasErrors([
+            'university',
+            'campus',
+            'faculty',
+            'course',
+            'year_of_study',
+            'student_registration_number',
+            'academic_interests',
+        ]);
+
+    expect(InternshipApplication::query()->count())->toBe(0);
 });
 
 test('internship detail migration safely adds missing fields without affecting listings', function () {

@@ -9,7 +9,21 @@ class InternshipApplication extends Model
 {
     public const STATUSES = ['submitted', 'shortlisted', 'interview', 'offered', 'placed', 'rejected', 'withdrawn'];
 
-    protected $fillable = ['internship_id', 'student_id', 'cover_letter', 'status', 'interview_at'];
+    protected $fillable = [
+        'internship_id',
+        'student_id',
+        'cover_letter',
+        'application_letter_path',
+        'university',
+        'campus',
+        'faculty',
+        'course',
+        'year_of_study',
+        'student_registration_number',
+        'academic_interests',
+        'status',
+        'interview_at',
+    ];
 
     protected function casts(): array
     {

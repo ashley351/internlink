@@ -118,7 +118,24 @@
         <span class="eyebrow">Applications</span><h2>Applicant pipeline</h2>
         <div class="table-wrap"><table class="table"><thead><tr><th>Applicant</th><th>University / course</th><th>Opportunity</th><th>Status</th><th>Update</th></tr></thead><tbody>
             @forelse($applications as $application)
-                <tr><td>{{ $application->student->name }}<details><summary style="color:var(--green);cursor:pointer">Read introductory letter</summary><p>{{ $application->cover_letter }}</p></details></td><td>{{ $application->student->university }}<br>{{ $application->student->course }}</td><td>{{ $application->internship->title }}</td><td>{{ ucfirst($application->status) }}@if($application->interview_at)<br>{{ $application->interview_at->format('j M, g:i a') }}@endif</td><td><form method="POST" action="{{ route('organisation.applications.update', $application) }}">@csrf @method('PATCH')<select class="input" name="status" required><option value="shortlisted">Shortlist</option><option value="interview">Interview</option><option value="offered">Offer</option><option value="placed">Placed</option><option value="rejected">Reject</option></select><input class="input" name="interview_at" type="datetime-local" style="margin-top:5px" aria-label="Interview date and time"><button class="button small" style="margin-top:5px">Update</button></form></td></tr>
+                <tr>
+                    <td>{{ $application->student->name }}
+                        <details><summary style="color:var(--green);cursor:pointer">Read introductory letter</summary><p>{{ $application->cover_letter }}</p></details>
+                        @if($application->application_letter_path)<a href="{{ route('organisation.applications.application-letter', $application) }}">Download application letter</a>@endif
+                    </td>
+                    <td>{{ $application->university }}<br>{{ $application->course }}
+                        <details><summary style="color:var(--green);cursor:pointer">Academic details</summary>
+                            <p>Campus: {{ $application->campus }}</p>
+                            <p>Faculty: {{ $application->faculty }}</p>
+                            <p>Year of study: {{ $application->year_of_study }}</p>
+                            <p>Registration number: {{ $application->student_registration_number }}</p>
+                            <p>Academic interests: {{ $application->academic_interests }}</p>
+                        </details>
+                    </td>
+                    <td>{{ $application->internship->title }}</td>
+                    <td>{{ ucfirst($application->status) }}@if($application->interview_at)<br>{{ $application->interview_at->format('j M, g:i a') }}@endif</td>
+                    <td><form method="POST" action="{{ route('organisation.applications.update', $application) }}">@csrf @method('PATCH')<select class="input" name="status" required><option value="shortlisted">Shortlist</option><option value="interview">Interview</option><option value="offered">Offer</option><option value="placed">Placed</option><option value="rejected">Reject</option></select><input class="input" name="interview_at" type="datetime-local" style="margin-top:5px" aria-label="Interview date and time"><button class="button small" style="margin-top:5px">Update</button></form></td>
+                </tr>
             @empty
                 <tr><td colspan="5">No applications received yet.</td></tr>
             @endforelse

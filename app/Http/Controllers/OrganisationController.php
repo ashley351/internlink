@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\InternshipApplication;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class OrganisationController extends Controller
 {
@@ -141,5 +143,22 @@ class OrganisationController extends Controller
         ]);
 
         return back()->with('status', 'Applicant status updated.');
+    }
+
+    public function downloadApplicationLetter(Request $request, InternshipApplication $application): BinaryFileResponse
+    {
+        abort_unless($request->user()->internships()->whereKey($application->internship_id)->exists(), 403);
+        abort_if(
+            blank($application->application_letter_path)
+                || ! Storage::disk('local')->exists($application->application_letter_path),
+            404,
+        );
+
+        $extension = pathinfo($application->application_letter_path, PATHINFO_EXTENSION);
+
+        return response()->download(
+            Storage::disk('local')->path($application->application_letter_path),
+            'application-letter'.($extension !== '' ? '.'.$extension : ''),
+        );
     }
 }
